@@ -1,0 +1,117 @@
+# Default values for ai-todo Helm chart
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Global configuration
+replicaCount:
+  frontend: 2
+  backend: 1
+
+# Image configuration
+image:
+  frontend:
+    repository: ai-todo-frontend
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+  backend:
+    repository: ai-todo-backend
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+
+# Service configuration
+service:
+  frontend:
+    type: NodePort
+    port: 80
+    targetPort: 3000
+    # nodePort: 30080  # Optional: specify NodePort, otherwise auto-assigned
+  backend:
+    type: ClusterIP
+    port: 8001
+    targetPort: 8001
+
+# Resource limits and requests
+resources:
+  frontend:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  backend:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+# Health check configuration
+healthChecks:
+  frontend:
+    liveness:
+      path: /
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 3
+    readiness:
+      path: /
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 3
+  backend:
+    liveness:
+      path: /health
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 3
+    readiness:
+      path: /health
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 3
+
+# Security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  fsGroup: 1001
+
+# Configuration (non-sensitive)
+config:
+  logLevel: "info"
+  debug: "true"
+  allowedOrigins: "http://localhost:3000,http://localhost:3001"
+  enableRateLimiting: "false"
+  rateLimitPerMinute: "100"
+  siteUrl: "http://localhost:3000"
+
+# Secrets (sensitive - provide via --set or separate values file)
+# DO NOT commit actual secrets to version control
+secrets:
+  databaseUrl: "postgresql+asyncpg://user:password@host:port/database"
+  betterAuthSecret: "change-me-min-32-chars-required"
+  jwtSecret: "change-me-min-32-chars-required"
+  groqApiKey: "change-me-groq-api-key"
+
+# Autoscaling (optional - for future use)
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Node selector (optional)
+nodeSelector: {}
+
+# Tolerations (optional)
+tolerations: []
+
+# Affinity (optional)
+affinity: {}

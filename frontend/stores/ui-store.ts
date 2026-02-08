@@ -1,7 +1,7 @@
 'use client'
 
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 
 interface UIState {
   focusMode: boolean
@@ -27,6 +27,18 @@ export const useUIStore = create<UIState>()(
     {
       name: 'ui-store',
       partialize: (state) => ({ displayMode: state.displayMode }), // Only persist displayMode
+      storage: createJSONStorage(() => {
+        // Only use localStorage in browser environment
+        if (typeof window !== 'undefined') {
+          return localStorage;
+        }
+        // Return a no-op storage for SSR
+        return {
+          getItem: () => null,
+          setItem: () => {},
+          removeItem: () => {},
+        };
+      }),
     }
   )
 )

@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ai-todo.fullname" . }}-frontend
+  labels:
+    {{- include "ai-todo.frontend.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount.frontend }}
+  selector:
+    matchLabels:
+      {{- include "ai-todo.frontend.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "ai-todo.frontend.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: frontend
+        app.kubernetes.io/part-of: ai-todo
+    spec:
+      securityContext:
+        runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
+        runAsUser: {{ .Values.securityContext.runAsUser }}
+        fsGroup: {{ .Values.securityContext.fsGroup }}
+      containers:
+      - name: frontend
+        image: "{{ .Values.image.frontend.repository }}:{{ .Values.image.frontend.tag }}"
+        imagePullPolicy: {{ .Values.image.frontend.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.service.frontend.targetPort }}
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: {{ include "ai-todo.fullname" . }}-config
+        - secretRef:
+            name: {{ include "ai-todo.fullname" . }}-secrets
+        resources:
+          {{- toYaml .Values.resources.frontend | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.healthChecks.frontend.liveness.path }}
+            port: http
+          initialDelaySeconds: {{ .Values.healthChecks.frontend.liveness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.healthChecks.frontend.liveness.periodSeconds }}
+          timeoutSeconds: {{ .Values.healthChecks.frontend.liveness.timeoutSeconds }}
+          failureThreshold: {{ .Values.healthChecks.frontend.liveness.failureThreshold }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.healthChecks.frontend.readiness.path }}
+            port: http
+          initialDelaySeconds: {{ .Values.healthChecks.frontend.readiness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.healthChecks.frontend.readiness.periodSeconds }}
+          timeoutSeconds: {{ .Values.healthChecks.frontend.readiness.timeoutSeconds }}
+          failureThreshold: {{ .Values.healthChecks.frontend.readiness.failureThreshold }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
