@@ -1,0 +1,470 @@
+openapi: 3.0.3
+info:
+  title: AI Chatbot & Persistence API
+  description: REST API for conversational AI task management with persistent chat history
+  version: 1.0.0
+  contact:
+    name: AI Todo Application
+
+servers:
+  - url: http://localhost:8001
+    description: Local development server
+  - url: https://aliaskariface-backend-todo-app.hf.space
+    description: Production server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /api/{user_id}/conversations:
+    post:
+      summary: Create a new conversation
+      description: Creates a new conversation thread for the authenticated user
+      operationId: createConversation
+      tags:
+        - Conversations
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: User ID from JWT token
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  maxLength: 200
+                  description: Optional conversation title
+                  example: "Work Tasks Discussion"
+      responses:
+        '201':
+          description: Conversation created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+    get:
+      summary: List all conversations
+      description: Retrieves all conversations for the authenticated user, sorted by most recent activity
+      operationId: listConversations
+      tags:
+        - Conversations
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: User ID from JWT token
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of conversations to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of conversations to skip
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Conversation'
+                  total:
+                    type: integer
+                    description: Total number of conversations
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/{user_id}/conversations/{conversation_id}:
+    patch:
+      summary: Update conversation title
+      description: Updates the title of an existing conversation
+      operationId: updateConversation
+      tags:
+        - Conversations
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: User ID from JWT token
+          schema:
+            type: string
+            format: uuid
+        - name: conversation_id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+              properties:
+                title:
+                  type: string
+                  maxLength: 200
+                  description: New conversation title
+                  example: "Updated Work Tasks"
+      responses:
+        '200':
+          description: Conversation updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/{user_id}/conversations/{conversation_id}/messages:
+    get:
+      summary: Get messages for a conversation
+      description: Retrieves all messages for a specific conversation in chronological order
+      operationId: getMessages
+      tags:
+        - Messages
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: User ID from JWT token
+          schema:
+            type: string
+            format: uuid
+        - name: conversation_id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of messages to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of messages to skip
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+                  total:
+                    type: integer
+                    description: Total number of messages in conversation
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/{user_id}/chat:
+    post:
+      summary: Send a message and get AI response
+      description: Sends a user message to the AI assistant and streams the response using Server-Sent Events
+      operationId: chat
+      tags:
+        - Chat
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: User ID from JWT token
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - conversation_id
+                - content
+              properties:
+                conversation_id:
+                  type: string
+                  format: uuid
+                  description: ID of the conversation to add the message to
+                content:
+                  type: string
+                  maxLength: 2000
+                  description: User message content
+                  example: "Add a task to buy milk"
+      responses:
+        '200':
+          description: Streaming AI response
+          headers:
+            Content-Type:
+              schema:
+                type: string
+                enum:
+                  - text/event-stream
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-cache
+            Connection:
+              schema:
+                type: string
+                enum:
+                  - keep-alive
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-Sent Events stream with AI response chunks
+                example: |
+                  data: {"type": "content", "content": "I'll add that task for you."}
+
+                  data: {"type": "tool_call", "tool": "create_task", "args": {"description": "buy milk"}}
+
+                  data: {"type": "content", "content": " Task created successfully!"}
+
+                  data: {"type": "done"}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '504':
+          $ref: '#/components/responses/GatewayTimeout'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from authentication endpoint
+
+  schemas:
+    Conversation:
+      type: object
+      required:
+        - id
+        - user_id
+        - title
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique conversation identifier
+        user_id:
+          type: string
+          format: uuid
+          description: ID of the user who owns this conversation
+        title:
+          type: string
+          maxLength: 200
+          description: Conversation title
+          example: "Work Tasks Discussion"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when conversation was created
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when conversation was last updated (message added)
+
+    Message:
+      type: object
+      required:
+        - id
+        - conversation_id
+        - role
+        - content
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique message identifier
+        conversation_id:
+          type: string
+          format: uuid
+          description: ID of the conversation this message belongs to
+        role:
+          type: string
+          enum:
+            - user
+            - assistant
+          description: Role of the message sender
+        content:
+          type: string
+          description: Message content
+          example: "Add a task to buy milk"
+        tool_calls:
+          type: array
+          nullable: true
+          description: MCP tool invocations made by the assistant (for debugging)
+          items:
+            type: object
+            properties:
+              tool:
+                type: string
+                description: Name of the MCP tool called
+              args:
+                type: object
+                description: Arguments passed to the tool
+              result:
+                type: object
+                description: Result returned by the tool
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when message was created
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          description: Additional error details
+
+  responses:
+    Unauthorized:
+      description: Authentication required or JWT token invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "unauthorized"
+            message: "Authentication required. Please provide a valid JWT token."
+
+    Forbidden:
+      description: User ID in path does not match authenticated user
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "forbidden"
+            message: "You do not have permission to access this resource."
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "not_found"
+            message: "The requested conversation or message was not found."
+
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "validation_error"
+            message: "Invalid request data"
+            details:
+              content: "Message content exceeds maximum length of 2000 characters"
+
+    RateLimitExceeded:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "rate_limit_exceeded"
+            message: "Rate limit exceeded. You can send up to 20 messages per minute and 200 per hour."
+            details:
+              retry_after: 45
+
+    GatewayTimeout:
+      description: AI service timeout
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "gateway_timeout"
+            message: "AI service did not respond within 30 seconds. Please try again."

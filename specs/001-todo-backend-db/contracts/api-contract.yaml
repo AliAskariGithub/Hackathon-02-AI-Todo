@@ -1,0 +1,179 @@
+# API Contract: Todo Backend & Database
+
+## Base Path
+`/api/{user_id}/tasks`
+
+## Endpoints
+
+### GET /api/{user_id}/tasks
+**Description**: Retrieve all tasks for a specific user
+
+**Parameters**:
+- `user_id` (path, required): UUID of the user whose tasks to retrieve
+
+**Responses**:
+- `200 OK`: Successfully retrieved tasks
+  - Body: Array of Task objects
+- `404 Not Found`: User ID does not exist
+- `500 Internal Server Error`: Server error
+
+**Response Schema**:
+```json
+[
+  {
+    "id": "uuid-string",
+    "title": "Task title",
+    "description": "Task description or null",
+    "completed": false,
+    "user_id": "uuid-string",
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+  }
+]
+```
+
+### POST /api/{user_id}/tasks
+**Description**: Create a new task for a specific user
+
+**Parameters**:
+- `user_id` (path, required): UUID of the user for whom to create the task
+
+**Request Body**:
+```json
+{
+  "title": "Task title",
+  "description": "Task description or null",
+  "completed": false
+}
+```
+
+**Responses**:
+- `201 Created`: Task successfully created
+  - Body: Created Task object
+- `400 Bad Request`: Invalid request body
+- `404 Not Found`: User ID does not exist
+- `500 Internal Server Error`: Server error
+
+**Response Schema**:
+```json
+{
+  "id": "uuid-string",
+  "title": "Task title",
+  "description": "Task description or null",
+  "completed": false,
+  "user_id": "uuid-string",
+  "created_at": "2024-01-01T00:00:00Z",
+  "updated_at": "2024-01-01T00:00:00Z"
+}
+```
+
+### GET /api/{user_id}/tasks/{task_id}
+**Description**: Retrieve a specific task for a user
+
+**Parameters**:
+- `user_id` (path, required): UUID of the user
+- `task_id` (path, required): UUID of the task to retrieve
+
+**Responses**:
+- `200 OK`: Successfully retrieved task
+  - Body: Task object
+- `404 Not Found`: User ID or task ID does not exist
+- `500 Internal Server Error`: Server error
+
+**Response Schema**:
+```json
+{
+  "id": "uuid-string",
+  "title": "Task title",
+  "description": "Task description or null",
+  "completed": false,
+  "user_id": "uuid-string",
+  "created_at": "2024-01-01T00:00:00Z",
+  "updated_at": "2024-01-01T00:00:00Z"
+}
+```
+
+### PUT /api/{user_id}/tasks/{task_id}
+**Description**: Update a specific task for a user
+
+**Parameters**:
+- `user_id` (path, required): UUID of the user
+- `task_id` (path, required): UUID of the task to update
+
+**Request Body**:
+```json
+{
+  "title": "Updated task title",
+  "description": "Updated task description or null",
+  "completed": true
+}
+```
+
+**Responses**:
+- `200 OK`: Task successfully updated
+  - Body: Updated Task object
+- `400 Bad Request`: Invalid request body
+- `404 Not Found`: User ID or task ID does not exist
+- `500 Internal Server Error`: Server error
+
+**Response Schema**:
+```json
+{
+  "id": "uuid-string",
+  "title": "Updated task title",
+  "description": "Updated task description or null",
+  "completed": true,
+  "user_id": "uuid-string",
+  "created_at": "2024-01-01T00:00:00Z",
+  "updated_at": "2024-01-02T00:00:00Z"
+}
+```
+
+### DELETE /api/{user_id}/tasks/{task_id}
+**Description**: Delete a specific task for a user
+
+**Parameters**:
+- `user_id` (path, required): UUID of the user
+- `task_id` (path, required): UUID of the task to delete
+
+**Responses**:
+- `204 No Content`: Task successfully deleted
+- `404 Not Found`: User ID or task ID does not exist
+- `500 Internal Server Error`: Server error
+
+## Common Error Responses
+
+### 400 Bad Request
+```json
+{
+  "detail": "Error message explaining the validation issue"
+}
+```
+
+### 404 Not Found
+```json
+{
+  "detail": "Resource not found"
+}
+```
+
+### 500 Internal Server Error
+```json
+{
+  "detail": "An internal server error occurred"
+}
+```
+
+## Authentication & Authorization
+
+- All endpoints are designed to accept user context via the user_id path parameter
+- Future integration with Better Auth will validate user identity
+- Each operation validates that the user_id matches the requesting user
+- Data isolation: Users can only access their own tasks
+
+## Validation Rules
+
+- `title` must be 1-255 characters
+- `completed` must be boolean
+- `user_id` and `task_id` must be valid UUIDs
+- Request bodies must be valid JSON
