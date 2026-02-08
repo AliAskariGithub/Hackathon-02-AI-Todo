@@ -57,11 +57,27 @@ A full-stack AI-powered todo application built with modern web technologies. The
 - JWT for authentication
 - bcrypt for password hashing
 
+### Infrastructure & DevOps
+- **Containerization**: Docker with multi-stage builds
+- **Orchestration**: Kubernetes (Minikube for local)
+- **Package Management**: Helm 3.x
+- **Automation**: Bash scripts for build/deploy/health-check workflows
+- **Security**: Non-root containers, resource limits, health probes
+
 ## 📋 Prerequisites
 
+### For Local Development
 - Node.js 18+ (for frontend)
 - Python 3.11+ (for backend)
 - PostgreSQL database (or Neon account)
+
+### For Kubernetes Deployment
+- Docker 20.10+ (with Docker Desktop recommended)
+- Minikube 1.30+ (for local Kubernetes cluster)
+- kubectl 1.27+ (Kubernetes CLI)
+- Helm 3.12+ (Kubernetes package manager)
+- 4GB+ RAM available for Minikube
+- 20GB+ disk space for images and cluster
 
 ## 🚀 Quick Start
 
@@ -426,6 +442,256 @@ cd backend
 chmod +x setup-local.sh
 ./setup-local.sh
 ```
+
+## ☸️ Kubernetes Deployment
+
+The application can be deployed to a local Kubernetes cluster using Minikube and Helm. This provides a production-like environment for testing and development.
+
+### Prerequisites
+
+Ensure you have the following installed:
+- Docker 20.10+ (Docker Desktop recommended)
+- Minikube 1.30+
+- kubectl 1.27+
+- Helm 3.12+
+
+### Quick Start (Automated)
+
+The fastest way to deploy is using the automated deployment script:
+
+```bash
+# 1. Start Minikube (if not already running)
+minikube start --driver=docker --cpus=4 --memory=8192
+
+# 2. Run the automated deployment script
+./scripts/deploy.sh
+```
+
+This script will:
+1. Build Docker images for frontend and backend
+2. Load images into Minikube
+3. Deploy the application using Helm
+4. Run health checks
+5. Display access information
+
+**Access the application:**
+```bash
+# Get the Minikube IP and NodePort
+minikube ip
+kubectl get service ai-todo-frontend -o jsonpath='{.spec.ports[0].nodePort}'
+
+# Access at: http://<minikube-ip>:<node-port>
+```
+
+### Manual Deployment Steps
+
+If you prefer manual control or need to troubleshoot:
+
+#### Step 1: Start Minikube
+
+```bash
+# Start Minikube with recommended resources
+minikube start --driver=docker --cpus=4 --memory=8192
+
+# Verify Minikube is running
+minikube status
+```
+
+#### Step 2: Build Docker Images
+
+```bash
+# Build frontend image
+cd frontend
+docker build -t ai-todo-frontend:v1.0.0 .
+
+# Build backend image
+cd ../backend
+docker build -t ai-todo-backend:v1.0.0 .
+
+# Verify images
+docker images | grep ai-todo
+```
+
+#### Step 3: Load Images into Minikube
+
+```bash
+# Load images into Minikube's Docker daemon
+minikube image load ai-todo-frontend:v1.0.0
+minikube image load ai-todo-backend:v1.0.0
+
+# Verify images in Minikube
+minikube image ls | grep ai-todo
+```
+
+#### Step 4: Configure Secrets
+
+Create a Kubernetes secret with your environment variables:
+
+```bash
+# Copy the example file
+cp .env.k8s.example .env.k8s
+
+# Edit with your actual values
+# Then create the secret
+kubectl create secret generic ai-todo-secrets \
+  --from-env-file=.env.k8s \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+#### Step 5: Deploy with Helm
+
+```bash
+# Install the Helm chart
+helm install ai-todo ./charts/ai-todo \
+  --namespace default \
+  --wait \
+  --timeout 5m
+
+# Or upgrade if already installed
+helm upgrade ai-todo ./charts/ai-todo \
+  --namespace default \
+  --wait \
+  --timeout 5m
+```
+
+#### Step 6: Verify Deployment
+
+```bash
+# Check pod status
+kubectl get pods -l app.kubernetes.io/part-of=ai-todo
+
+# Check services
+kubectl get services -l app.kubernetes.io/part-of=ai-todo
+
+# View logs
+kubectl logs -l app.kubernetes.io/component=frontend --tail=50
+kubectl logs -l app.kubernetes.io/component=backend --tail=50
+```
+
+### Configuration
+
+The Helm chart can be customized via `charts/ai-todo/values.yaml`:
+
+```yaml
+# Example: Adjust resource limits
+resources:
+  frontend:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  backend:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+# Example: Change replica counts
+replicaCount:
+  frontend: 2
+  backend: 1
+```
+
+### Useful Commands
+
+```bash
+# View all resources
+kubectl get all -l app.kubernetes.io/part-of=ai-todo
+
+# Port forward for local access
+kubectl port-forward service/ai-todo-frontend 3000:80
+
+# View detailed pod information
+kubectl describe pod -l app.kubernetes.io/component=frontend
+
+# Execute commands in a pod
+kubectl exec -it <pod-name> -- /bin/sh
+
+# View Helm release status
+helm status ai-todo
+
+# View Helm release history
+helm history ai-todo
+
+# Rollback to previous version
+helm rollback ai-todo
+
+# Uninstall the application
+helm uninstall ai-todo
+```
+
+### Cleanup
+
+To remove the deployment and free up resources:
+
+```bash
+# Using the cleanup script
+./scripts/cleanup.sh
+
+# Or manually
+helm uninstall ai-todo
+kubectl delete configmap -l app.kubernetes.io/part-of=ai-todo
+kubectl delete secret -l app.kubernetes.io/part-of=ai-todo
+
+# Stop Minikube (optional)
+minikube stop
+
+# Delete Minikube cluster (optional)
+minikube delete
+```
+
+### Troubleshooting
+
+**Pods not starting:**
+```bash
+# Check pod events
+kubectl describe pod <pod-name>
+
+# Check logs
+kubectl logs <pod-name>
+
+# Check if images are loaded
+minikube image ls | grep ai-todo
+```
+
+**Cannot access application:**
+```bash
+# Verify service is running
+kubectl get service ai-todo-frontend
+
+# Get Minikube IP
+minikube ip
+
+# Check NodePort
+kubectl get service ai-todo-frontend -o jsonpath='{.spec.ports[0].nodePort}'
+```
+
+**Image pull errors:**
+```bash
+# Ensure images are loaded into Minikube
+./scripts/load-images.sh
+
+# Verify imagePullPolicy is IfNotPresent
+kubectl get deployment ai-todo-frontend -o yaml | grep imagePullPolicy
+```
+
+**Health check failures:**
+```bash
+# Run the health check script
+./scripts/health-check.sh
+
+# Check readiness probes
+kubectl get pods -o wide
+kubectl describe pod <pod-name> | grep -A 10 Readiness
+```
+
+For more detailed deployment instructions and troubleshooting, see:
+- [Kubernetes Deployment Quickstart](specs/001-k8s-aiops-deployment/quickstart.md)
+- [Feature Specification](specs/001-k8s-aiops-deployment/spec.md)
 
 ## 🤝 Contributing
 
