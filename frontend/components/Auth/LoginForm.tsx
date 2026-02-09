@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import apiClient from "@/services/api-client";
 import { useAuth } from "@/providers/auth-provider";
 import { motion } from "framer-motion";
@@ -23,7 +22,6 @@ export default function LoginForm() {
   const [redirecting, setRedirecting] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const { login } = useAuth();
-  const router = useRouter();
   const prefersReducedMotion = useReducedMotion();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -69,10 +67,11 @@ export default function LoginForm() {
           description: "Welcome back! Redirecting to dashboard...",
         });
 
-        // Use Next.js router for client-side navigation (no page reload)
+        // Use window.location.href to force a full page reload
+        // This ensures the auth provider initializes the session from localStorage token
         setTimeout(() => {
-          router.push("/dashboard");
-        }, 300);
+          window.location.href = "/dashboard";
+        }, 500);
       } else {
         const errorMsg = "Login failed. Please try again.";
         setError(errorMsg);

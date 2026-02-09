@@ -126,9 +126,32 @@ export default function DashboardPage() {
 
   // Load tasks on mount
   useEffect(() => {
-    if (!isLoading && session === null) {
+    // Check for token in localStorage as fallback (for cross-domain auth)
+    const hasToken = typeof window !== 'undefined' && localStorage.getItem('access_token');
+
+    // Show loading state while auth is initializing
+    if (isLoading) {
+      return; // Don't do anything while loading
+    }
+
+    // Only redirect to login if:
+    // 1. Not loading
+    // 2. No session
+    // 3. No token in localStorage
+    if (session === null && !hasToken) {
+      console.log('No session and no token, redirecting to login');
       router.push('/login');
-    } else if (session) {
+      return;
+    }
+
+    // If we have a token but no session yet, wait for auth provider to initialize
+    if (hasToken && !session) {
+      console.log('Token exists but session not loaded yet, waiting...');
+      return;
+    }
+
+    // Load tasks if we have a session
+    if (session) {
       const loadTasks = async () => {
         setIsLoadingTasks(true);
         const userId = session?.user?.id;
