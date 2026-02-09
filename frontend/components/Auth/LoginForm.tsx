@@ -50,8 +50,12 @@ export default function LoginForm() {
       });
 
       if (response.user) {
+        // Store access token for cross-domain authentication (production)
+        if (response.access_token) {
+          localStorage.setItem('access_token', response.access_token);
+        }
+
         // Update auth context with user data
-        // Cookies are already set by the backend
         login(response.user);
 
         setRedirecting(true);

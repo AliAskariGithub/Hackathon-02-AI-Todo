@@ -3,8 +3,9 @@ class ApiClient {
   private baseUrl: string = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_LOCAL_URL || 'http://localhost:8000';
 
   /**
-   * Generic method to make authenticated API requests with cookie-based auth.
-   * Cookies are automatically included in all requests.
+   * Generic method to make authenticated API requests.
+   * Supports both cookie-based auth (local) and token-based auth (production/cross-domain).
+   * Cookies are automatically included, and Bearer token is added if available.
    *
    * @param endpoint The API endpoint to call
    * @param options Request options including method, headers, body
@@ -14,13 +15,23 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
+    // Get token from localStorage for cross-domain authentication
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(options.headers as Record<string, string>),
+    };
+
+    // Add Authorization header if token exists (for cross-domain auth)
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const config: RequestInit = {
       ...options,
-      credentials: 'include', // Always include cookies for authentication
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      credentials: 'include', // Include cookies for local development
+      headers,
     };
 
     try {
@@ -39,9 +50,25 @@ class ApiClient {
           });
 
           if (refreshResponse.ok) {
+            const refreshData = await refreshResponse.json();
+
+            // Update token in localStorage if provided
+            if (refreshData.access_token && typeof window !== 'undefined') {
+              localStorage.setItem('access_token', refreshData.access_token);
+
+              // Update Authorization header with new token
+              if (headers['Authorization']) {
+                headers['Authorization'] = `Bearer ${refreshData.access_token}`;
+              }
+            }
+
             // Token refreshed successfully, retry the original request
             console.log('Token refreshed successfully, retrying request');
-            const retryResponse = await fetch(`${this.baseUrl}${endpoint}`, config);
+            const retryConfig = {
+              ...config,
+              headers
+            };
+            const retryResponse = await fetch(`${this.baseUrl}${endpoint}`, retryConfig);
 
             if (!retryResponse.ok) {
               throw new Error(`HTTP Error: ${retryResponse.status}`);
@@ -55,16 +82,18 @@ class ApiClient {
           } else {
             // Refresh failed - user needs to log in again
             console.error('Token refresh failed - redirecting to login');
-            // Redirect to login page
+            // Clear token from localStorage
             if (typeof window !== 'undefined') {
+              localStorage.removeItem('access_token');
               window.location.href = '/login';
             }
             throw new Error('Unauthorized: Session expired. Please log in again.');
           }
         } catch (refreshError) {
           console.error('Error during token refresh:', refreshError);
-          // Redirect to login on refresh failure
+          // Clear token and redirect to login on refresh failure
           if (typeof window !== 'undefined') {
+            localStorage.removeItem('access_token');
             window.location.href = '/login';
           }
           throw new Error('Unauthorized: Session expired. Please log in again.');

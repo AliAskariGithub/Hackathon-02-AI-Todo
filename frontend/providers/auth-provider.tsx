@@ -29,13 +29,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Initialize session by checking with backend
-    // Cookies are automatically sent with the request
     const initializeSession = async () => {
       try {
-        // Try to fetch current user info (will use cookie for auth)
-        // If cookie is valid, backend will return user info
+        // Check for token in localStorage (for cross-domain auth)
+        const token = localStorage.getItem('access_token');
+
+        // Prepare headers with token if available
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json'
+        };
+
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        // Try to fetch current user info
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/users/me`, {
-          credentials: 'include'
+          credentials: 'include', // Still include cookies for local development
+          headers
         });
 
         if (response.ok) {
@@ -48,11 +59,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           });
         } else {
-          // No valid session
+          // No valid session - clear any stale token
+          localStorage.removeItem('access_token');
           setSession(null);
         }
       } catch (error) {
         console.error('Error initializing session:', error);
+        localStorage.removeItem('access_token');
         setSession(null);
       } finally {
         setIsLoading(false);
@@ -81,6 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Error during logout:', error);
     } finally {
+      // Clear token from localStorage
+      localStorage.removeItem('access_token');
       // Clear session state regardless of API call result
       setSession(null);
     }
