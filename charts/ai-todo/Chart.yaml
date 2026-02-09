@@ -1,0 +1,17 @@
+apiVersion: v2
+name: ai-todo
+description: A Helm chart for AI Todo full-stack application on Kubernetes
+type: application
+version: 1.0.0
+appVersion: "v1.0.0"
+keywords:
+  - ai-todo
+  - nextjs
+  - fastapi
+  - kubernetes
+  - helm
+maintainers:
+  - name: AI Todo Team
+home: https://github.com/your-org/ai-todo
+sources:
+  - https://github.com/your-org/ai-todo

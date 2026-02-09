@@ -1,0 +1,460 @@
+openapi: 3.0.3
+info:
+  title: Todo Application MCP Tools API
+  description: API specification for Model Context Protocol (MCP) tools in the Todo application
+  version: 1.0.0
+servers:
+  - url: http://localhost:8000
+    description: Development server
+
+paths:
+  /mcp/tools/add_task:
+    post:
+      summary: Add a new task for the authenticated user
+      description: Creates a new task associated with the authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddTaskRequest'
+      responses:
+        '200':
+          description: Task created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddTaskResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+      security:
+        - bearerAuth: []
+
+  /mcp/tools/list_tasks:
+    post:
+      summary: List tasks for the authenticated user
+      description: Retrieves tasks associated with the authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListTasksRequest'
+      responses:
+        '200':
+          description: Tasks retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListTasksResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+      security:
+        - bearerAuth: []
+
+  /mcp/tools/complete_task:
+    post:
+      summary: Mark a task as completed
+      description: Updates a task to mark it as completed for the authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteTaskRequest'
+      responses:
+        '200':
+          description: Task completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompleteTaskResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/TaskNotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+      security:
+        - bearerAuth: []
+
+  /mcp/tools/delete_task:
+    post:
+      summary: Delete a task
+      description: Removes a task for the authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteTaskRequest'
+      responses:
+        '200':
+          description: Task deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteTaskResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/TaskNotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+      security:
+        - bearerAuth: []
+
+  /mcp/tools/update_task:
+    post:
+      summary: Update task properties
+      description: Modifies properties of an existing task for the authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskRequest'
+      responses:
+        '200':
+          description: Task updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateTaskResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/TaskNotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+      security:
+        - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # Request Bodies
+    AddTaskRequest:
+      type: object
+      required:
+        - params
+      properties:
+        params:
+          type: object
+          required:
+            - user_id
+            - title
+          properties:
+            user_id:
+              type: string
+              description: The authenticated user's ID (automatically injected)
+              example: "user_abc123"
+            title:
+              type: string
+              description: The title of the task
+              example: "Buy groceries"
+            description:
+              type: string
+              description: Optional description of the task
+              example: "Pick up milk, bread, and eggs"
+            due_date:
+              type: string
+              format: date-time
+              description: Optional due date for the task
+              example: "2023-12-25T10:00:00Z"
+
+    ListTasksRequest:
+      type: object
+      required:
+        - params
+      properties:
+        params:
+          type: object
+          required:
+            - user_id
+          properties:
+            user_id:
+              type: string
+              description: The authenticated user's ID (automatically injected)
+              example: "user_abc123"
+            status:
+              type: string
+              enum: [all, pending, completed]
+              default: all
+              description: Filter tasks by status
+            limit:
+              type: integer
+              minimum: 1
+              maximum: 100
+              default: 20
+              description: Maximum number of tasks to return
+            offset:
+              type: integer
+              minimum: 0
+              default: 0
+              description: Offset for pagination
+
+    CompleteTaskRequest:
+      type: object
+      required:
+        - params
+      properties:
+        params:
+          type: object
+          required:
+            - user_id
+            - task_id
+          properties:
+            user_id:
+              type: string
+              description: The authenticated user's ID (automatically injected)
+              example: "user_abc123"
+            task_id:
+              type: string
+              description: The ID of the task to complete
+              example: "task_def456"
+
+    DeleteTaskRequest:
+      type: object
+      required:
+        - params
+      properties:
+        params:
+          type: object
+          required:
+            - user_id
+            - task_id
+          properties:
+            user_id:
+              type: string
+              description: The authenticated user's ID (automatically injected)
+              example: "user_abc123"
+            task_id:
+              type: string
+              description: The ID of the task to delete
+              example: "task_def456"
+
+    UpdateTaskRequest:
+      type: object
+      required:
+        - params
+      properties:
+        params:
+          type: object
+          required:
+            - user_id
+            - task_id
+          properties:
+            user_id:
+              type: string
+              description: The authenticated user's ID (automatically injected)
+              example: "user_abc123"
+            task_id:
+              type: string
+              description: The ID of the task to update
+              example: "task_def456"
+            title:
+              type: string
+              description: New title for the task (optional)
+              example: "Updated task title"
+            description:
+              type: string
+              description: New description for the task (optional)
+              example: "Updated task description"
+            due_date:
+              type: string
+              format: date-time
+              description: New due date for the task (optional)
+              example: "2023-12-25T10:00:00Z"
+            status:
+              type: string
+              enum: [pending, completed]
+              description: New status for the task (optional)
+
+    # Response Bodies
+    AddTaskResponse:
+      type: object
+      required:
+        - success
+        - task_id
+      properties:
+        success:
+          type: boolean
+          description: Indicates whether the operation was successful
+        task_id:
+          type: string
+          description: The ID of the created task
+        message:
+          type: string
+          description: Additional information about the operation
+
+    ListTasksResponse:
+      type: object
+      required:
+        - success
+        - tasks
+      properties:
+        success:
+          type: boolean
+          description: Indicates whether the operation was successful
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+        total_count:
+          type: integer
+          description: Total number of tasks matching the criteria
+        message:
+          type: string
+          description: Additional information about the operation
+
+    CompleteTaskResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+          description: Indicates whether the operation was successful
+        message:
+          type: string
+          description: Additional information about the operation
+
+    DeleteTaskResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+          description: Indicates whether the operation was successful
+        message:
+          type: string
+          description: Additional information about the operation
+
+    UpdateTaskResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+          description: Indicates whether the operation was successful
+        task:
+          $ref: '#/components/schemas/Task'
+        message:
+          type: string
+          description: Additional information about the operation
+
+    Task:
+      type: object
+      required:
+        - id
+        - title
+        - user_id
+        - completed
+        - created_at
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the task
+          example: "task_def456"
+        title:
+          type: string
+          description: The title of the task
+          example: "Buy groceries"
+        description:
+          type: string
+          description: The description of the task
+          example: "Pick up milk, bread, and eggs"
+        completed:
+          type: boolean
+          description: Whether the task is completed
+          example: false
+        due_date:
+          type: string
+          format: date-time
+          description: The due date for the task
+          example: "2023-12-25T10:00:00Z"
+        created_at:
+          type: string
+          format: date-time
+          description: When the task was created
+          example: "2023-12-01T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: When the task was last updated
+          example: "2023-12-01T10:00:00Z"
+        user_id:
+          type: string
+          description: The ID of the user who owns the task
+          example: "user_abc123"
+
+    # Common Error Responses
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - error
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          description: Error message
+          example: "Something went wrong"
+        error_code:
+          type: string
+          description: Standardized error code
+          example: "GENERIC_ERROR"
+
+  responses:
+    UnauthorizedError:
+      description: Unauthorized - Invalid or missing authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      examples:
+        Unauthorized:
+          value:
+            success: false
+            error: "Unauthorized access - valid JWT required"
+            error_code: "AUTHENTICATION_ERROR"
+
+    ValidationError:
+      description: Validation error - Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      examples:
+        Validation:
+          value:
+            success: false
+            error: "Request parameters do not match required schema"
+            error_code: "VALIDATION_ERROR"
+
+    TaskNotFoundError:
+      description: Task not found - Task doesn't exist or doesn't belong to user
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      examples:
+        NotFound:
+          value:
+            success: false
+            error: "Task not found or doesn't belong to user"
+            error_code: "TASK_NOT_FOUND"

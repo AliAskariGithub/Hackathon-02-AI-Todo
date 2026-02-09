@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ai-todo.fullname" . }}-backend
+  labels:
+    {{- include "ai-todo.backend.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount.backend }}
+  selector:
+    matchLabels:
+      {{- include "ai-todo.backend.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "ai-todo.backend.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/part-of: ai-todo
+    spec:
+      securityContext:
+        runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
+        runAsUser: {{ .Values.securityContext.runAsUser }}
+        fsGroup: {{ .Values.securityContext.fsGroup }}
+      containers:
+      - name: backend
+        image: "{{ .Values.image.backend.repository }}:{{ .Values.image.backend.tag }}"
+        imagePullPolicy: {{ .Values.image.backend.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.service.backend.targetPort }}
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: {{ include "ai-todo.fullname" . }}-config
+        - configMapRef:
+            name: {{ include "ai-todo.fullname" . }}-backend-config
+        - secretRef:
+            name: {{ include "ai-todo.fullname" . }}-secrets
+        resources:
+          {{- toYaml .Values.resources.backend | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.healthChecks.backend.liveness.path }}
+            port: http
+          initialDelaySeconds: {{ .Values.healthChecks.backend.liveness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.healthChecks.backend.liveness.periodSeconds }}
+          timeoutSeconds: {{ .Values.healthChecks.backend.liveness.timeoutSeconds }}
+          failureThreshold: {{ .Values.healthChecks.backend.liveness.failureThreshold }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.healthChecks.backend.readiness.path }}
+            port: http
+          initialDelaySeconds: {{ .Values.healthChecks.backend.readiness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.healthChecks.backend.readiness.periodSeconds }}
+          timeoutSeconds: {{ .Values.healthChecks.backend.readiness.timeoutSeconds }}
+          failureThreshold: {{ .Values.healthChecks.backend.readiness.failureThreshold }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

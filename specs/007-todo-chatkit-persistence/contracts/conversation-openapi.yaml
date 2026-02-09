@@ -1,0 +1,433 @@
+openapi: 3.0.3
+info:
+  title: Todo Application ChatKit API
+  description: API specification for ChatKit integration and persistent chat functionality
+  version: 1.0.0
+servers:
+  - url: http://localhost:8000
+    description: Development server
+
+paths:
+  /api/mcp/execute-tool:
+    post:
+      summary: Execute an MCP tool with authentication context
+      description: Execute an MCP tool with proper user authentication context
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tool_name
+                - params
+              properties:
+                tool_name:
+                  type: string
+                  description: Name of the MCP tool to execute
+                  enum: [add_task, list_tasks, complete_task, update_task, delete_task]
+                params:
+                  type: object
+                  description: Parameters for the tool call, including user_id
+      responses:
+        '200':
+          description: Tool executed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  task_id:
+                    type: string
+                  error_code:
+                    type: string
+        '401':
+          description: Unauthorized - Missing or invalid JWT token
+        '403':
+          description: Forbidden - User lacks access to the resource
+        '400':
+          description: Bad request - Invalid tool parameters
+      security:
+        - HTTPBearer: []
+
+  /api/{user_id}/chatkit/session:
+    post:
+      summary: Create a ChatKit session for the user
+      description: Creates a new ChatKit session for the authenticated user
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: The ID of the authenticated user
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                conversation_id:
+                  type: string
+                  description: Optional existing conversation ID
+                initial_message:
+                  type: string
+                  description: Optional initial message for the session
+      responses:
+        '200':
+          description: ChatKit session created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id:
+                    type: string
+                    description: ID of the created session
+                  conversation_id:
+                    type: string
+                    description: ID of the conversation being used
+                  client_secret:
+                    type: string
+                    description: Secret for ChatKit client authentication
+        '401':
+          description: Unauthorized - Missing or invalid JWT token
+        '403':
+          description: Forbidden - User doesn't own the specified conversation
+      security:
+        - HTTPBearer: []
+
+  /api/{user_id}/conversations:
+    get:
+      summary: List user's conversations
+      description: Get all conversations for the specified user
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: The ID of the user whose conversations to retrieve
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of conversations to return (default 20)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          description: Offset for pagination (default 0)
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Conversations retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Conversation'
+                  total_count:
+                    type: integer
+        '401':
+          description: Unauthorized - Missing or invalid JWT token
+        '403':
+          description: Forbidden - User doesn't have access to these conversations
+      security:
+        - HTTPBearer: []
+
+    post:
+      summary: Create a new conversation
+      description: Create a new conversation for the user
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: The ID of the user creating the conversation
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  description: Title for the conversation
+      responses:
+        '201':
+          description: Conversation created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '401':
+          description: Unauthorized - Missing or invalid JWT token
+        '403':
+          description: Forbidden - User doesn't have permission to create conversation
+        '400':
+          description: Bad request - Invalid conversation parameters
+      security:
+        - HTTPBearer: []
+
+  /api/{user_id}/conversations/{conversation_id}/messages:
+    get:
+      summary: Get messages from a conversation
+      description: Retrieve messages from a specific conversation
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: The ID of the user
+          schema:
+            type: string
+        - name: conversation_id
+          in: path
+          required: true
+          description: The ID of the conversation
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of messages to return (default 15)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 15
+        - name: offset
+          in: query
+          required: false
+          description: Offset for pagination (default 0)
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Messages retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+                  total_count:
+                    type: integer
+        '401':
+          description: Unauthorized - Missing or invalid JWT token
+        '403':
+          description: Forbidden - User doesn't have access to this conversation
+        '404':
+          description: Conversation not found
+      security:
+        - HTTPBearer: []
+
+    post:
+      summary: Add a message to a conversation
+      description: Add a new message to an existing conversation
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: The ID of the user
+          schema:
+            type: string
+        - name: conversation_id
+          in: path
+          required: true
+          description: The ID of the conversation
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageCreate'
+      responses:
+        '201':
+          description: Message added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          description: Unauthorized - Missing or invalid JWT token
+        '403':
+          description: Forbidden - User doesn't have access to this conversation
+        '404':
+          description: Conversation not found
+        '400':
+          description: Bad request - Invalid message parameters
+      security:
+        - HTTPBearer: []
+
+  /api/{user_id}/chat:
+    post:
+      summary: Main chat endpoint with history
+      description: Process a chat message with access to conversation history
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: The ID of the authenticated user
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - message
+                - conversation_id
+              properties:
+                message:
+                  type: string
+                  description: The user's message
+                conversation_id:
+                  type: string
+                  description: The ID of the conversation
+                stream:
+                  type: boolean
+                  description: Whether to stream the response (default true)
+      responses:
+        '200':
+          description: Chat response generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  response:
+                    type: string
+                    description: The AI agent's response
+                  conversation_id:
+                    type: string
+                    description: The conversation ID used
+                  tool_calls:
+                    type: array
+                    items:
+                      type: object
+                      description: Any tool calls made by the agent
+        '401':
+          description: Unauthorized - Missing or invalid JWT token
+        '403':
+          description: Forbidden - User doesn't have access to this conversation
+        '400':
+          description: Bad request - Invalid message parameters
+      security:
+        - HTTPBearer: []
+
+components:
+  securitySchemes:
+    HTTPBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Conversation:
+      type: object
+      required:
+        - id
+        - title
+        - user_id
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the conversation
+        title:
+          type: string
+          description: Descriptive title for the conversation
+        user_id:
+          type: string
+          format: uuid
+          description: ID of the user who owns the conversation
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the conversation was created
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the conversation was last updated
+
+    Message:
+      type: object
+      required:
+        - id
+        - conversation_id
+        - role
+        - content
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the message
+        conversation_id:
+          type: string
+          format: uuid
+          description: ID of the conversation this message belongs to
+        role:
+          type: string
+          enum: [user, assistant]
+          description: Role of the message sender
+        content:
+          type: string
+          description: Content of the message
+        tool_calls:
+          type: array
+          items:
+            type: object
+            description: Details of any tools called in this message
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the message was created
+
+    MessageCreate:
+      type: object
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+          description: Role of the message sender
+        content:
+          type: string
+          description: Content of the message
+        tool_calls:
+          type: array
+          items:
+            type: object
+            description: Details of any tools called in this message
