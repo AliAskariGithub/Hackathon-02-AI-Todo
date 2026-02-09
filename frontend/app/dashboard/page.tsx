@@ -124,29 +124,25 @@ export default function DashboardPage() {
     }
   );
 
-  // Load tasks on mount
+  // Load tasks on mount - MUST be before any early returns (Rules of Hooks)
   useEffect(() => {
-    // Check for token in localStorage as fallback (for cross-domain auth)
+    // Check for token in localStorage as fallback
     const hasToken = typeof window !== 'undefined' && localStorage.getItem('access_token');
 
-    // Show loading state while auth is initializing
+    // Don't do anything while loading
     if (isLoading) {
-      return; // Don't do anything while loading
+      return;
     }
 
-    // Only redirect to login if:
-    // 1. Not loading
-    // 2. No session
-    // 3. No token in localStorage
-    if (session === null && !hasToken) {
-      console.log('No session and no token, redirecting to login');
+    // Redirect to login if no session and no token
+    if (!session && !hasToken) {
       router.push('/login');
       return;
     }
 
-    // If we have a token but no session yet, wait for auth provider to initialize
+    // Wait for auth provider to initialize if we have token but no session
     if (hasToken && !session) {
-      console.log('Token exists but session not loaded yet, waiting...');
+      console.log('Token exists, waiting for session to initialize...');
       return;
     }
 
@@ -169,6 +165,45 @@ export default function DashboardPage() {
       loadTasks();
     }
   }, [session, isLoading, router]);
+
+  // Show loading state while auth is initializing
+  if (isLoading) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="flex flex-col items-center gap-4">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            >
+              <Sparkles className="h-8 w-8 text-primary" />
+            </motion.div>
+            <p className="text-muted-foreground">Loading your dashboard...</p>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  // Show loading state while waiting for session to initialize (has token but no session yet)
+  const hasToken = typeof window !== 'undefined' && localStorage.getItem('access_token');
+  if (!session && hasToken) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="flex flex-col items-center gap-4">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            >
+              <Sparkles className="h-8 w-8 text-primary" />
+            </motion.div>
+            <p className="text-muted-foreground">Initializing session...</p>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
 
   // Handle task creation via dialog
   const handleAddTaskViaDialog = async (taskData: { title: string; description?: string }) => {
