@@ -75,6 +75,11 @@ const useChatKit = (): UseChatKitReturn => {
       // Get token from localStorage for authentication
       const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
 
+      // DEBUG: Log token status
+      console.log('[ChatKit] Sending message - Token exists:', !!token);
+      console.log('[ChatKit] Token length:', token ? token.length : 0);
+      console.log('[ChatKit] Token preview:', token ? token.substring(0, 30) + '...' : 'null');
+
       // Prepare headers with Authorization token
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -82,7 +87,12 @@ const useChatKit = (): UseChatKitReturn => {
 
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
+        console.log('[ChatKit] Authorization header added to request');
+      } else {
+        console.error('[ChatKit] NO TOKEN FOUND - Authorization header NOT added!');
       }
+
+      console.log('[ChatKit] Request headers:', headers);
 
       // Call the backend API to process the message with the agent
       const response = await fetch(`${apiBaseUrl}/api/${userId}/chat`, {
