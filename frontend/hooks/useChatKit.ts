@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { toast } from './use-toast';
 import { useAuth } from '@/providers/auth-provider';
 
+// VERSION: 2.0.0 - Added Authorization header support for production
 // Types for ChatKit functionality
 interface ChatMessage {
   id: string;
