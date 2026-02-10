@@ -193,11 +193,21 @@ const ChatPageContent = () => {
 
         const userId = session.user.id;
 
+        // Get token from localStorage for authentication
+        const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+
+        // Prepare headers with Authorization token
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
         const response = await fetch(`${apiBaseUrl}/api/${userId}/conversations`, {
           credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers,
         });
 
         if (response.ok) {
@@ -211,9 +221,7 @@ const ChatPageContent = () => {
               `${apiBaseUrl}/api/${userId}/conversations/${latestConversation.id}/messages`,
               {
                 credentials: 'include',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
+                headers,
               }
             );
 
@@ -342,12 +350,22 @@ const ChatPageContent = () => {
 
       const userId = session.user.id;
 
+      // Get token from localStorage for authentication
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+
+      // Prepare headers with Authorization token
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${apiBaseUrl}/api/${userId}/chat`, {
         method: 'POST',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           content: currentInput,
           role: 'user',
