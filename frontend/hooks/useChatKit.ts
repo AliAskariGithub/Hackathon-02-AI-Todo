@@ -72,13 +72,23 @@ const useChatKit = (): UseChatKitReturn => {
 
       const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
+      // Get token from localStorage for authentication
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+
+      // Prepare headers with Authorization token
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       // Call the backend API to process the message with the agent
       const response = await fetch(`${apiBaseUrl}/api/${userId}/chat`, {
         method: 'POST',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           content: message,
           conversation_id: conversationId || null,
@@ -136,12 +146,22 @@ const useChatKit = (): UseChatKitReturn => {
     try {
       const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
+      // Get token from localStorage for authentication
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+
+      // Prepare headers with Authorization token
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${apiBaseUrl}/api/${userId}/conversations`, {
         method: 'POST',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           title: `Conversation ${new Date().toLocaleDateString()}`,
         }),
@@ -182,12 +202,22 @@ const useChatKit = (): UseChatKitReturn => {
     try {
       const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
+      // Get token from localStorage for authentication
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+
+      // Prepare headers with Authorization token
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${apiBaseUrl}/api/${userId}/conversations`, {
         method: 'GET',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
       });
 
       if (!response.ok) {
