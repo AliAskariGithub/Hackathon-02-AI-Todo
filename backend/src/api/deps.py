@@ -31,6 +31,12 @@ async def get_current_user(
     Raises:
         HTTPException: If the token is invalid, expired, or missing
     """
+    # DEBUG: Log all headers
+    logger.info(f"[AUTH DEBUG] Request path: {request.url.path}")
+    logger.info(f"[AUTH DEBUG] Request headers: {dict(request.headers)}")
+    logger.info(f"[AUTH DEBUG] Cookie access_token: {access_token[:30] if access_token else 'None'}...")
+    logger.info(f"[AUTH DEBUG] HTTPBearer credentials: {credentials.credentials[:30] if credentials else 'None'}...")
+
     token = None
     auth_method = None
 
@@ -38,16 +44,17 @@ async def get_current_user(
     if access_token:
         token = access_token
         auth_method = "cookie"
-        logger.debug("Authentication via cookie")
+        logger.info("[AUTH DEBUG] Using cookie-based authentication")
 
     # Priority 2: Fall back to Authorization header (legacy system)
     elif credentials:
         token = credentials.credentials
         auth_method = "header"
-        logger.debug("Authentication via Authorization header (legacy)")
+        logger.info("[AUTH DEBUG] Using Authorization header authentication")
 
     # No authentication provided
     if not token:
+        logger.error("[AUTH DEBUG] NO TOKEN FOUND - Neither cookie nor Authorization header present")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated. Please log in."
