@@ -17,13 +17,13 @@ async def get_current_user(
 ) -> Dict[str, Any]:
     """
     Dependency to get the current user from the JWT token.
-    Supports both cookie-based (new) and header-based (legacy) authentication.
-    Cookie takes priority over Authorization header during migration.
+    Supports both cookie-based (local dev) and header-based (production) authentication.
+    Cookie takes priority over Authorization header for local development.
 
     Args:
         request: The incoming request object
-        access_token: JWT token from HTTP-only cookie (new method)
-        credentials: The authorization credentials from header (legacy method)
+        access_token: JWT token from HTTP-only cookie (local dev)
+        credentials: The authorization credentials from header (production)
 
     Returns:
         Decoded JWT payload containing user information
@@ -31,30 +31,21 @@ async def get_current_user(
     Raises:
         HTTPException: If the token is invalid, expired, or missing
     """
-    # DEBUG: Log all headers
-    logger.info(f"[AUTH DEBUG] Request path: {request.url.path}")
-    logger.info(f"[AUTH DEBUG] Request headers: {dict(request.headers)}")
-    logger.info(f"[AUTH DEBUG] Cookie access_token: {access_token[:30] if access_token else 'None'}...")
-    logger.info(f"[AUTH DEBUG] HTTPBearer credentials: {credentials.credentials[:30] if credentials else 'None'}...")
-
     token = None
     auth_method = None
 
-    # Priority 1: Check for cookie-based token (new system)
+    # Priority 1: Check for cookie-based token (local development)
     if access_token:
         token = access_token
         auth_method = "cookie"
-        logger.info("[AUTH DEBUG] Using cookie-based authentication")
 
-    # Priority 2: Fall back to Authorization header (legacy system)
+    # Priority 2: Fall back to Authorization header (production)
     elif credentials:
         token = credentials.credentials
         auth_method = "header"
-        logger.info("[AUTH DEBUG] Using Authorization header authentication")
 
     # No authentication provided
     if not token:
-        logger.error("[AUTH DEBUG] NO TOKEN FOUND - Neither cookie nor Authorization header present")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated. Please log in."
