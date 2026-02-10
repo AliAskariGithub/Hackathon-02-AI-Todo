@@ -9,11 +9,28 @@
 let refreshInterval: NodeJS.Timeout | null = null;
 
 /**
+ * Check if we're using localStorage tokens (production) vs cookies (local dev)
+ */
+function isUsingLocalStorageAuth(): boolean {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem('access_token') !== null;
+}
+
+/**
  * Refresh the access token by calling the backend refresh endpoint
  * The backend will set a new access_token cookie
+ *
+ * NOTE: This only works for cookie-based auth (local development).
+ * In production with localStorage tokens, refresh is not supported yet.
  */
 async function refreshAccessToken(): Promise<boolean> {
   try {
+    // Skip refresh if using localStorage tokens (production cross-domain setup)
+    if (isUsingLocalStorageAuth()) {
+      console.log('[Auth Refresh] Using localStorage tokens, skipping cookie-based refresh');
+      return true; // Return true to prevent logout
+    }
+
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
     console.log('[Auth Refresh] Attempting to refresh access token...');
