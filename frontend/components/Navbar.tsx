@@ -14,11 +14,12 @@ import { cn } from '@/lib/utils';
 import { usePathname } from 'next/navigation';
 
 const homeSections = [
-  { name: 'Hero', href: '/#hero' },
+  { name: 'Hero', href: '//' },
   { name: 'Stats', href: '/#stats' },
+  { name: 'How It Works', href: '/#how-it-works' },
   { name: 'Features', href: '/#features' },
-  { name: 'Testimonials', href: '/#testimonials' },
   { name: 'Pricing', href: '/#pricing' },
+  { name: 'Testimonials', href: '//#testimonials' },
   { name: 'FAQ', href: '/#faq' },
   { name: 'Subscribe', href: '/#subscribe' },
 ];

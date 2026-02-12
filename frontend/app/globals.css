@@ -401,8 +401,8 @@
 
 .back-to-top {
   position: fixed;
-  bottom: 2rem;
-  right: 2rem;
+  bottom: 7rem;
+  right: 2.5rem;
   z-index: 50;
   width: 3rem;
   height: 3rem;

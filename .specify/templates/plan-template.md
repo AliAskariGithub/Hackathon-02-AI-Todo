@@ -17,14 +17,17 @@
   the iteration process.
 -->
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
-**Project Type**: [single/web/mobile - determines source structure]  
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
+**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]
+**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
+**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
+**Event Streaming**: [if applicable, e.g., Kafka (Strimzi), Redpanda, or N/A]
+**Distributed Runtime**: [if applicable, e.g., Dapr v1.14+, or N/A]
+**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]
+**Target Platform**: [e.g., Linux server, iOS 15+, WASM, Kubernetes or NEEDS CLARIFICATION]
+**Project Type**: [single/web/mobile - determines source structure]
+**Architecture Pattern**: [e.g., Monolithic, Microservices, Event-Driven, or NEEDS CLARIFICATION]
+**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]
+**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]
 **Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
 
 ## Constitution Check
@@ -102,3 +105,45 @@ directories captured above]
 |-----------|------------|-------------------------------------|
 | [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
 | [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+
+## Event-Driven Architecture Decisions (Phase-V)
+
+> **Fill ONLY if feature involves event-driven patterns, Dapr, or Kafka**
+
+### Communication Pattern
+
+- **Synchronous (HTTP/REST)**: [List operations requiring immediate response]
+- **Asynchronous (Events)**: [List operations suitable for eventual consistency]
+- **Rationale**: [Why this split? What are the tradeoffs?]
+
+### Dapr Components Required
+
+- [ ] **State Store**: [If needed, specify provider: PostgreSQL, Redis, etc.]
+- [ ] **Pub/Sub**: [If needed, specify provider: Kafka, Redpanda, etc.]
+- [ ] **Secrets**: [If needed, specify provider: Kubernetes Secrets, Azure Key Vault, etc.]
+- [ ] **Jobs**: [If needed for scheduling/reminders]
+
+### Event Schema Design
+
+**Events to Publish**:
+- `[domain].[entity].[action]` (e.g., `todo.task.created`)
+  - Payload: [Brief description of event data]
+  - Consumers: [Which services/components will consume this event]
+
+**Events to Subscribe**:
+- `[domain].[entity].[action]` (e.g., `todo.notification.requested`)
+  - Handler: [Which service/component handles this event]
+  - Action: [What happens when event is received]
+
+### Distributed Tracing Strategy
+
+- **Critical Paths**: [List user journeys that must be fully traceable]
+- **Correlation ID Propagation**: [How correlation IDs flow through the system]
+- **Sampling Rate**: [Development: 100%, Production: adaptive/percentage]
+
+### Cloud Provider Neutrality
+
+- **Provider-Specific Features Used**: [List any Azure/Oracle/AWS-specific features]
+- **Abstraction Strategy**: [How are these abstracted via Dapr components]
+- **Migration Path**: [How to swap providers with zero code changes]
+

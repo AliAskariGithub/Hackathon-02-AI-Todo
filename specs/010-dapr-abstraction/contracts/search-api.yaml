@@ -1,0 +1,310 @@
+openapi: 3.0.3
+info:
+  title: Search API - Advanced Task Search and Filtering
+  description: API for searching, filtering, and sorting tasks with natural language support
+  version: 1.0.0
+  contact:
+    name: AI Todo Backend Team
+
+servers:
+  - url: http://localhost:8000/api
+    description: Local development
+  - url: http://localhost:3500/v1.0/invoke/backend/method/api
+    description: Dapr Service Invocation (from frontend)
+
+security:
+  - BearerAuth: []
+
+paths:
+  /search/tasks:
+    get:
+      summary: Search and filter tasks
+      description: Server-side search with keyword matching, filtering, and sorting
+      operationId: searchTasks
+      tags:
+        - Search
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+          description: Search query (matches title and description)
+          example: "groceries"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, in_progress, completed, deleted]
+          description: Filter by task status
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [High, Medium, Low]
+          description: Filter by priority level
+        - name: tags
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by tags (OR logic)
+          example: ["shopping", "urgent"]
+        - name: due_date_from
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter tasks due after this date
+          example: "2026-02-11T00:00:00Z"
+        - name: due_date_to
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter tasks due before this date
+          example: "2026-02-15T23:59:59Z"
+        - name: has_recurrence
+          in: query
+          schema:
+            type: boolean
+          description: Filter tasks with recurrence patterns
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            enum: [due_date, priority, created_at, updated_at]
+            default: created_at
+          description: Sort field
+        - name: sort_order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+          description: Sort order
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 100
+          description: Maximum number of results
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Number of results to skip for pagination
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+                  total:
+                    type: integer
+                    description: Total number of matching tasks
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+                  query:
+                    type: object
+                    description: Applied filters and sort parameters
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /search/natural-language:
+    post:
+      summary: Natural language task search
+      description: Parse natural language query and execute search (chatbot integration)
+      operationId: naturalLanguageSearch
+      tags:
+        - Search
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query
+              properties:
+                query:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                  example: "Show me high priority tasks due tomorrow"
+                  description: Natural language search query
+      responses:
+        '200':
+          description: Parsed query and search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  parsed_query:
+                    type: object
+                    description: Extracted filters from natural language
+                    properties:
+                      priority:
+                        type: string
+                        enum: [High, Medium, Low]
+                        nullable: true
+                      due_date_from:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      due_date_to:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      status:
+                        type: string
+                        enum: [pending, in_progress, completed]
+                        nullable: true
+                      tags:
+                        type: array
+                        items:
+                          type: string
+                        nullable: true
+                      keywords:
+                        type: array
+                        items:
+                          type: string
+                        nullable: true
+                  tasks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+                  total:
+                    type: integer
+                  interpretation:
+                    type: string
+                    example: "Searching for high priority tasks due between 2026-02-12T00:00:00Z and 2026-02-12T23:59:59Z"
+                    description: Human-readable interpretation of the query
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /search/tags:
+    get:
+      summary: List user's tags
+      description: Get all unique tags used by the authenticated user
+      operationId: listTags
+      tags:
+        - Search
+      responses:
+        '200':
+          description: List of tags
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tags:
+                    type: array
+                    items:
+                      type: string
+                    example: ["shopping", "urgent", "work", "personal"]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Task:
+      type: object
+      required:
+        - id
+        - user_id
+        - title
+        - status
+        - priority
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pending, in_progress, completed, deleted]
+        priority:
+          type: string
+          enum: [High, Medium, Low]
+        due_date:
+          type: string
+          format: date-time
+          nullable: true
+        recurrence:
+          type: string
+          enum: [Daily, Weekly, Monthly]
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Validation error"
+              details:
+                type: object
+
+    Unauthorized:
+      description: Missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Unauthorized"

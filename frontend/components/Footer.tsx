@@ -61,7 +61,7 @@ export function Footer() {
               <span className="font-semibold text-lg">Y-Todo</span>
             </div>
             <p className="text-secondary-foreground">
-              Boost your productivity with our intuitive todo application.
+              AI-powered task management that understands you. Work smarter, not harder with intelligent automation and natural language processing.
             </p>
           </motion.div>
 
@@ -95,19 +95,19 @@ export function Footer() {
             <h4 className="font-bold mb-4">Legal</h4>
             <ul className="space-y-2">
               <li>
-                <a href="#" className="text-secondary-foreground hover:text-primary transition-colors underline-slide inline-block opacity-75">
+                <Link href="/privacy" className="text-secondary-foreground hover:text-primary transition-colors underline-slide inline-block opacity-75">
                   Privacy Policy
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#" className="text-secondary-foreground hover:text-primary transition-colors underline-slide inline-block opacity-75">
+                <Link href="/terms" className="text-secondary-foreground hover:text-primary transition-colors underline-slide inline-block opacity-75">
                   Terms of Service
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#" className="text-secondary-foreground hover:text-primary transition-colors underline-slide inline-block opacity-75">
+                <Link href="/cookies" className="text-secondary-foreground hover:text-primary transition-colors underline-slide inline-block opacity-75">
                   Cookie Policy
-                </a>
+                </Link>
               </li>
             </ul>
           </motion.div>

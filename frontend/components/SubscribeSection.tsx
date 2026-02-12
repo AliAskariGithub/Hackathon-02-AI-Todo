@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Send, CheckCircle2 } from 'lucide-react';
+import { Send, CheckCircle2, SubscriptIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function SubscribeSection() {
@@ -32,7 +32,17 @@ export default function SubscribeSection() {
             {/* Background Mesh */}
             <div className="absolute inset-0 bg-linear-to-b from-transparent via-primary/5 to-transparent opacity-50 pointer-events-none" />
 
-            <div className="container mx-auto px-4 relative z-10">
+            <div className="container mx-auto px-4 relative z-10 text-center">
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/5 text-primary text-sm font-bold uppercase tracking-widest mb-6 border border-primary/10 hover:bg-primary/10 transition-colors cursor-default"
+                >
+                    <SubscriptIcon className="w-4 h-4" />
+                    Stay Updated
+                </motion.div>
                 <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     whileInView={{ opacity: 1, scale: 1 }}

@@ -87,6 +87,7 @@ def get_async_engine():
                 max_overflow=0,    # Limit overflow connections for serverless
                 pool_size=5,       # Smaller pool for serverless
                 connect_args={
+                    "ssl": "require",  # Required for Neon and most cloud PostgreSQL
                     "server_settings": {
                         "application_name": "ai-todo-app",
                     },

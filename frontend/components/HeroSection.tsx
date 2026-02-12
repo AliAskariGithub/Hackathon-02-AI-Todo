@@ -65,57 +65,60 @@ export default function HeroSection() {
           className="text-5xl md:text-7xl font-black mb-8 leading-tight tracking-tight"
           variants={itemVariants}
         >
-          Master Your Day <br />
+          AI-Powered Task Management <br />
           <span className="text-transparent bg-clip-text bg-linear-to-r from-primary via-emerald-400 to-purple-500 animate-gradient-text">
-            With Elegance.
+            That Actually Understands You
           </span>
         </motion.h1>
 
         <motion.p
-          className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto mb-12 font-light leading-relaxed"
+          className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto mb-12 font-light leading-relaxed"
           variants={itemVariants}
         >
-          Manage your tasks efficiently with an intuitive, beautiful interface
-          designed to keep you focused and organized.
+          Chat with your tasks naturally, get smart suggestions, and let AI organize your day automatically.
+          No more manual sorting—just tell us what you need.
         </motion.p>
 
         <motion.div
-          className="flex flex-col sm:flex-row gap-5 justify-center"
+          className="flex flex-col sm:flex-row gap-5 justify-center items-start"
           variants={itemVariants}
         >
-          {!session?.user ? (
-            <Link href="/signup">
-              <motion.div
-                whileHover={prefersReducedMotion ? {} : { scale: 1.05 }}
-                whileTap={prefersReducedMotion ? {} : { scale: 0.95 }}
-              >
-                <Button
-                  size="lg"
-                  className="px-8 py-6 text-lg rounded-full shadow-lg shadow-primary/25 bg-linear-to-r from-primary to-emerald-500 border-0 hover:shadow-xl transition-all"
+          <div className="flex flex-col items-center justify-center gap-2">
+            {!session?.user ? (
+              <Link href="/signup">
+                <motion.div
+                  whileHover={prefersReducedMotion ? {} : { scale: 1.05 }}
+                  whileTap={prefersReducedMotion ? {} : { scale: 0.95 }}
                 >
-                  Get Started Free
-                  <ArrowRight className="ml-2 w-5 h-5" />
-                </Button>
-              </motion.div>
-            </Link>
-          ) : (
-            <Link href="/dashboard">
-              <motion.div
-                whileHover={prefersReducedMotion ? {} : { scale: 1.05 }}
-                whileTap={prefersReducedMotion ? {} : { scale: 0.95 }}
-              >
-                <Button
-                  size="lg"
-                  className="px-8 py-6 text-lg rounded-full shadow-lg shadow-primary/25 bg-linear-to-r from-primary to-emerald-500 border-0 hover:shadow-xl transition-all"
+                  <Button
+                    size="lg"
+                    className="px-8 py-6 text-lg rounded-full shadow-lg shadow-primary/25 bg-linear-to-r from-primary to-emerald-500 border-0 hover:shadow-xl transition-all"
+                  >
+                    Get Started Free
+                    <ArrowRight className="ml-2 w-5 h-5" />
+                  </Button>
+                </motion.div>
+              </Link>
+            ) : (
+              <Link href="/dashboard">
+                <motion.div
+                  whileHover={prefersReducedMotion ? {} : { scale: 1.05 }}
+                  whileTap={prefersReducedMotion ? {} : { scale: 0.95 }}
                 >
-                  Create Tasks
-                  <ArrowRight className="ml-2 w-5 h-5" />
-                </Button>
-              </motion.div>
-            </Link>
-          )}
+                  <Button
+                    size="lg"
+                    className="px-8 py-6 text-lg rounded-full shadow-lg shadow-primary/25 bg-linear-to-r from-primary to-emerald-500 border-0 hover:shadow-xl transition-all"
+                  >
+                    Create Tasks
+                    <ArrowRight className="ml-2 w-5 h-5" />
+                  </Button>
+                </motion.div>
+              </Link>
+            )}
+            <p className="text-sm text-muted-foreground pt-2">No credit card required • Free forever</p>
+          </div>
 
-          <Link href="/#features">
+          <Link href="/#how-it-works">
             <motion.div
               whileHover={prefersReducedMotion ? {} : { scale: 1.05 }}
               whileTap={prefersReducedMotion ? {} : { scale: 0.95 }}
@@ -125,7 +128,7 @@ export default function HeroSection() {
                 size="lg"
                 className="px-8 py-6 text-lg rounded-full border-2 hover:bg-muted/50 transition-all backdrop-blur-sm"
               >
-                Learn More
+                See How It Works
               </Button>
             </motion.div>
           </Link>

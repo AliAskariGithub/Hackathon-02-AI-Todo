@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, CircleQuestionMark } from 'lucide-react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 interface FAQItem {
@@ -13,35 +13,35 @@ interface FAQItem {
 const faqs: FAQItem[] = [
   {
     question: "What is AI Todo and how does it work?",
-    answer: "AI Todo is an intelligent task management application that combines traditional todo list functionality with AI-powered assistance. Our AI chatbot helps you create, organize, and manage tasks through natural conversation, making task management effortless and intuitive."
+    answer: "AI Todo is an intelligent task management app that lets you manage your to-do list through natural conversation. Instead of filling out forms, just type or speak what you need: 'Schedule team meeting for Thursday at 2pm' or 'Remind me to follow up with the client next week.' Our AI understands context, extracts details, and organizes everything automatically. It learns your patterns over time to make smarter suggestions about priorities, scheduling, and task organization."
+  },
+  {
+    question: "How does the AI chatbot help with task management?",
+    answer: "Our AI assistant acts like a personal productivity coach. You can: • Create tasks by speaking naturally: 'Buy groceries tomorrow afternoon' • Update multiple tasks at once: 'Move all Thursday meetings to Friday' • Ask for insights: 'What should I focus on today?' • Get smart suggestions: AI recommends priorities based on deadlines and importance • Set contextual reminders: 'Remind me when I'm at the office'. The more you use it, the better it understands your work style and preferences."
+  },
+  {
+    question: "What makes your AI different from other todo apps?",
+    answer: "Most todo apps with 'AI' just have basic autocomplete or templates. Our AI actually understands natural language, context, and your personal patterns. You can have a real conversation about your tasks, and it learns how you work. It's like having a personal assistant who knows your schedule, understands your priorities, and helps you stay organized without you having to think about it."
   },
   {
     question: "Is my data secure and private?",
     answer: "Yes, absolutely! We take data security seriously. All your data is encrypted and stored securely in our database. We use JWT-based authentication to protect your account, and we never share your personal information or tasks with third parties."
   },
   {
+    question: "What kind of data does the AI use to learn my patterns?",
+    answer: "The AI analyzes your task creation patterns, completion rates, preferred work times, and scheduling habits—but only within your account. Your data is never shared with other users or used to train models for others. You have complete privacy, and you can clear your AI learning history anytime from settings."
+  },
+  {
+    question: "Does the AI work offline?",
+    answer: "You can view and check off tasks offline, and they'll sync when you're back online. However, AI-powered features like natural language task creation and smart suggestions require an internet connection. We're working on offline AI capabilities for a future update."
+  },
+  {
     question: "Can I use AI Todo on multiple devices?",
     answer: "Yes! AI Todo is a web-based application that works seamlessly across all your devices. Simply log in with your account credentials on any device with a web browser, and all your tasks will be synchronized automatically."
   },
   {
-    question: "How does the AI chatbot help with task management?",
-    answer: "Our AI chatbot understands natural language and can help you create tasks, set priorities, organize your workflow, and provide suggestions. Simply chat with it like you would with a personal assistant, and it will handle the task management for you."
-  },
-  {
     question: "Is there a free plan available?",
-    answer: "Yes! We offer a free plan that includes all core features like task creation, editing, completion tracking, and basic AI chat functionality. Premium plans offer additional features like advanced AI capabilities, priority support, and enhanced analytics."
-  },
-  {
-    question: "Can I export my tasks and data?",
-    answer: "Yes, you can export your tasks and data at any time. We believe in data portability and want you to have full control over your information. Export options are available in your account settings."
-  },
-  {
-    question: "What happens if I forget my password?",
-    answer: "If you forget your password, you can use the 'Forgot Password' link on the login page to reset it. We'll send you a secure reset link to your registered email address to help you regain access to your account."
-  },
-  {
-    question: "Do you offer customer support?",
-    answer: "Yes! We provide customer support through multiple channels. Free users have access to our help center and community forums, while premium users get priority email support and faster response times."
+    answer: "Yes! We offer a free plan that includes up to 50 AI conversations per month, 5 projects with unlimited tasks, basic AI suggestions, and mobile & web access. Premium plans offer unlimited AI conversations, advanced prioritization, and context-aware reminders."
   }
 ];
 
@@ -55,7 +55,17 @@ export default function FAQSection() {
 
   return (
     <section id="faq" className="py-20 px-4 bg-secondary-light dark:bg-secondary-dark">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-4xl mx-auto text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/5 text-primary text-sm font-bold uppercase tracking-widest mb-6 border border-primary/10 hover:bg-primary/10 transition-colors cursor-default"
+        >
+          <CircleQuestionMark className="w-4 h-4" />
+          FAQs
+        </motion.div>
+
         <motion.div
           className="text-center mb-12"
           initial={{ opacity: 0, y: 20 }}

@@ -4,6 +4,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 import uuid
 from uuid import UUID
+from pydantic import field_validator
 
 
 class UserBase(SQLModel):
@@ -27,7 +28,13 @@ class User(UserBase, table=True):
 class TaskBase(SQLModel):
     title: str = Field(min_length=1, max_length=255)
     description: Optional[str] = Field(default=None)
-    completed: bool = Field(default=False)
+    status: str = Field(default="pending", max_length=20)
+    priority: str = Field(default="Medium", max_length=10)
+    due_date: Optional[datetime] = Field(default=None)
+    recurrence: Optional[str] = Field(default=None, max_length=10)
+    recurrence_day_of_week: Optional[int] = Field(default=None, ge=0, le=6)
+    recurrence_day_of_month: Optional[int] = Field(default=None, ge=1, le=31)
+    tags: Optional[List[str]] = Field(default=None, sa_column=Column(JSON))
 
 
 class Task(TaskBase, table=True):
@@ -36,6 +43,14 @@ class Task(TaskBase, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow,
                                 sa_column_kwargs={"onupdate": datetime.utcnow})
+    completed_at: Optional[datetime] = Field(default=None)
+    parent_task_id: Optional[uuid.UUID] = Field(default=None, foreign_key="task.id")
+    correlation_id: Optional[uuid.UUID] = Field(default=None)
+
+    # Backward compatibility: computed property for 'completed'
+    @property
+    def completed(self) -> bool:
+        return self.status == "completed"
 
     # Relationship to user
     user: User = Relationship(back_populates="tasks")
@@ -62,32 +77,113 @@ class Testimonial(TestimonialBase, table=True):
 class TaskCreate(SQLModel):
     title: str = Field(min_length=1, max_length=255)
     description: Optional[str] = Field(default=None)
-    completed: bool = Field(default=False)
-    # user_id will be taken from the path parameter, not the request body
+    status: str = Field(default="pending", max_length=20)
+    priority: str = Field(default="Medium", max_length=10)
+    due_date: Optional[datetime] = Field(default=None)
+    recurrence: Optional[str] = Field(default=None, max_length=10)
+    recurrence_day_of_week: Optional[int] = Field(default=None, ge=0, le=6)
+    recurrence_day_of_month: Optional[int] = Field(default=None, ge=1, le=31)
+    tags: Optional[List[str]] = Field(default=None)
 
+    @field_validator('recurrence')
+    @classmethod
+    def validate_recurrence(cls, v):
+        """Validate recurrence type."""
+        if v is not None and v not in ['Daily', 'Weekly', 'Monthly']:
+            raise ValueError("recurrence must be 'Daily', 'Weekly', or 'Monthly'")
+        return v
 
-class TaskBase(SQLModel):
-    title: str = Field(min_length=1, max_length=255)
-    description: Optional[str] = Field(default=None)
-    completed: bool = Field(default=False)
+    @field_validator('recurrence_day_of_week')
+    @classmethod
+    def validate_recurrence_day_of_week(cls, v, info):
+        """Validate day_of_week is provided for Weekly recurrence."""
+        recurrence = info.data.get('recurrence')
+        if recurrence == 'Weekly' and v is None:
+            raise ValueError("recurrence_day_of_week is required for Weekly recurrence")
+        if recurrence != 'Weekly' and v is not None:
+            raise ValueError("recurrence_day_of_week should only be set for Weekly recurrence")
+        return v
+
+    @field_validator('recurrence_day_of_month')
+    @classmethod
+    def validate_recurrence_day_of_month(cls, v, info):
+        """Validate day_of_month is provided for Monthly recurrence."""
+        recurrence = info.data.get('recurrence')
+        if recurrence == 'Monthly' and v is None:
+            raise ValueError("recurrence_day_of_month is required for Monthly recurrence")
+        if recurrence != 'Monthly' and v is not None:
+            raise ValueError("recurrence_day_of_month should only be set for Monthly recurrence")
+        return v
+
+    @field_validator('status')
+    @classmethod
+    def validate_status(cls, v):
+        """Validate status."""
+        if v not in ['pending', 'in_progress', 'completed', 'deleted']:
+            raise ValueError("status must be 'pending', 'in_progress', 'completed', or 'deleted'")
+        return v
+
+    @field_validator('priority')
+    @classmethod
+    def validate_priority(cls, v):
+        """Validate priority."""
+        if v not in ['High', 'Medium', 'Low']:
+            raise ValueError("priority must be 'High', 'Medium', or 'Low'")
+        return v
 
 
 class TaskCreateInternal(TaskBase):
-    user_id: uuid.UUID = Field(foreign_key="user.id")  # For internal use when creating with user_id
+    """Internal task creation model with user_id included."""
+    user_id: uuid.UUID = Field(foreign_key="user.id")
 
 
 class TaskUpdate(SQLModel):
     title: Optional[str] = Field(default=None, min_length=1, max_length=255)
     description: Optional[str] = Field(default=None)
-    completed: Optional[bool] = Field(default=None)
-    # user_id should not be updatable through this endpoint
+    status: Optional[str] = Field(default=None, max_length=20)
+    priority: Optional[str] = Field(default=None, max_length=10)
+    due_date: Optional[datetime] = Field(default=None)
+    recurrence: Optional[str] = Field(default=None, max_length=10)
+    recurrence_day_of_week: Optional[int] = Field(default=None, ge=0, le=6)
+    recurrence_day_of_month: Optional[int] = Field(default=None, ge=1, le=31)
+    tags: Optional[List[str]] = Field(default=None)
+
+    @field_validator('recurrence')
+    @classmethod
+    def validate_recurrence(cls, v):
+        """Validate recurrence type."""
+        if v is not None and v not in ['Daily', 'Weekly', 'Monthly']:
+            raise ValueError("recurrence must be 'Daily', 'Weekly', or 'Monthly'")
+        return v
+
+    @field_validator('status')
+    @classmethod
+    def validate_status(cls, v):
+        """Validate status."""
+        if v is not None and v not in ['pending', 'in_progress', 'completed', 'deleted']:
+            raise ValueError("status must be 'pending', 'in_progress', 'completed', or 'deleted'")
+        return v
+
+    @field_validator('priority')
+    @classmethod
+    def validate_priority(cls, v):
+        """Validate priority."""
+        if v is not None and v not in ['High', 'Medium', 'Low']:
+            raise ValueError("priority must be 'High', 'Medium', or 'Low'")
+        return v
 
 
 class TaskPublic(TaskBase):
     id: uuid.UUID
-    user_id: uuid.UUID  # Include user_id in the public representation
+    user_id: uuid.UUID
     created_at: datetime
     updated_at: datetime
+    completed_at: Optional[datetime] = None
+    parent_task_id: Optional[uuid.UUID] = None
+    correlation_id: Optional[uuid.UUID] = None
+
+    class Config:
+        from_attributes = True
 
 
 class TaskWithUser(TaskPublic):

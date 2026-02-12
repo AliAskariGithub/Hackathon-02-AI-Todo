@@ -1,0 +1,290 @@
+openapi: 3.0.3
+info:
+  title: Reminders API - Intelligent Time-Based Reminders
+  description: API for scheduling and managing task reminders via Dapr Jobs API
+  version: 1.0.0
+  contact:
+    name: AI Todo Backend Team
+
+servers:
+  - url: http://localhost:8000/api
+    description: Local development
+  - url: http://localhost:3500/v1.0/invoke/backend/method/api
+    description: Dapr Service Invocation (from frontend)
+
+security:
+  - BearerAuth: []
+
+paths:
+  /reminders:
+    get:
+      summary: List user's reminders
+      description: Retrieve all reminders for the authenticated user
+      operationId: listReminders
+      tags:
+        - Reminders
+      parameters:
+        - name: task_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter reminders by task ID
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [scheduled, sent, cancelled]
+          description: Filter by reminder status
+      responses:
+        '200':
+          description: List of reminders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reminders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Reminder'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Schedule a new reminder
+      description: Create a reminder for a task using Dapr Jobs API
+      operationId: createReminder
+      tags:
+        - Reminders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReminderCreate'
+      responses:
+        '201':
+          description: Reminder scheduled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reminder'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Task not found"
+
+  /reminders/{reminder_id}:
+    get:
+      summary: Get reminder by ID
+      description: Retrieve a specific reminder by its ID
+      operationId: getReminder
+      tags:
+        - Reminders
+      parameters:
+        - $ref: '#/components/parameters/ReminderId'
+      responses:
+        '200':
+          description: Reminder details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reminder'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    delete:
+      summary: Cancel reminder
+      description: Cancel a scheduled reminder (deletes Dapr Job)
+      operationId: cancelReminder
+      tags:
+        - Reminders
+      parameters:
+        - $ref: '#/components/parameters/ReminderId'
+      responses:
+        '204':
+          description: Reminder cancelled successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /reminders/callback:
+    post:
+      summary: Dapr Jobs API callback
+      description: Internal endpoint called by Dapr Jobs API when reminder time arrives
+      operationId: reminderCallback
+      tags:
+        - Reminders
+      security: []  # No auth required for Dapr callbacks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reminder_id:
+                  type: string
+                  format: uuid
+                task_id:
+                  type: string
+                  format: uuid
+                user_id:
+                  type: string
+                  format: uuid
+                scheduled_time:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: Reminder processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+        '500':
+          description: Reminder processing failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  error:
+                    type: string
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ReminderId:
+      name: reminder_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Reminder unique identifier
+
+  schemas:
+    Reminder:
+      type: object
+      required:
+        - id
+        - task_id
+        - user_id
+        - scheduled_time
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        task_id:
+          type: string
+          format: uuid
+          example: "987e6543-e21b-12d3-a456-426614174999"
+        user_id:
+          type: string
+          format: uuid
+          example: "456e7890-e12b-34d5-a678-901234567890"
+        scheduled_time:
+          type: string
+          format: date-time
+          example: "2026-02-15T09:00:00Z"
+          description: "When the reminder should fire (ISO 8601 format)"
+        status:
+          type: string
+          enum: [scheduled, sent, cancelled]
+          example: "scheduled"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-02-11T10:00:00Z"
+        sent_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-02-15T09:00:05Z"
+        dapr_job_name:
+          type: string
+          example: "reminder-123e4567-e89b-12d3-a456-426614174000"
+          description: "Dapr Jobs API job identifier"
+
+    ReminderCreate:
+      type: object
+      required:
+        - task_id
+        - scheduled_time
+      properties:
+        task_id:
+          type: string
+          format: uuid
+          example: "987e6543-e21b-12d3-a456-426614174999"
+        scheduled_time:
+          type: string
+          format: date-time
+          example: "2026-02-15T09:00:00Z"
+          description: "Must be at least 1 minute in the future"
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Validation error"
+              details:
+                type: object
+                example: { "scheduled_time": "Must be in the future" }
+
+    Unauthorized:
+      description: Missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Unauthorized"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Reminder not found"

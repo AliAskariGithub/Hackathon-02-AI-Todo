@@ -4,14 +4,13 @@ Each tool implements the required functionality with user authentication context
 """
 import json
 import asyncio
-import asyncio
 from typing import Dict, Any, Optional, List
 from uuid import UUID
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
-from src.models import Task, TaskUpdate, TaskCreateInternal
+from src.models import Task, TaskUpdate, TaskCreate
 from src.services.task_service import TaskService
-from src.utils.database import get_async_session
+from src.utils.database import get_async_session_factory
 from .error_codes import (
     TASK_NOT_FOUND,
     UNAUTHORIZED_ACCESS,
@@ -22,54 +21,143 @@ from .error_codes import (
 )
 
 
-async def add_task(user_id: str, title: str, description: Optional[str] = None, due_date: Optional[str] = None) -> Dict[str, Any]:
+# Core task management functions
+
+async def add_task(user_id: str, title: str, description: Optional[str] = None,
+                  priority: Optional[str] = None, due_date: Optional[str] = None,
+                  recurrence: Optional[str] = None, recurrence_day_of_week: Optional[int] = None,
+                  recurrence_day_of_month: Optional[int] = None, tags: Optional[List[str]] = None) -> Dict[str, Any]:
     """
-    Add a new task for the authenticated user.
+    Add a new task for the authenticated user with full feature support.
 
     Args:
         user_id: The authenticated user's ID (from JWT token)
         title: Task title
         description: Optional task description
+        priority: Optional priority (High, Medium, Low)
         due_date: Optional due date in ISO format
+        recurrence: Optional recurrence pattern (Daily, Weekly, Monthly)
+        recurrence_day_of_week: Day of week for weekly recurrence (0-6)
+        recurrence_day_of_month: Day of month for monthly recurrence (1-31)
+        tags: Optional list of tags
 
     Returns:
         Dict with success status and task_id
     """
     try:
-        # Convert user_id to UUID
         user_uuid = UUID(user_id)
-
-        # Get the async engine and session factory to create a session properly
-        from src.utils.database import get_async_engine, get_async_session_factory
-
-        # Create an async session using the proper session factory
         session_factory = get_async_session_factory()
+
         async with session_factory() as session:
-            # Create a TaskCreate object (the standard model for creating tasks)
-            # The TaskService.create_task method will handle associating with the user_id
-            from src.models import TaskCreate as TaskCreateModel
-            task_create = TaskCreateModel(
+            task_create = TaskCreate(
                 title=title,
-                description=description,
-                completed=False  # New tasks are not completed by default
+                description=description or "",
+                priority=priority or "Medium",
+                status="pending",
+                due_date=due_date,
+                recurrence=recurrence,
+                recurrence_day_of_week=recurrence_day_of_week,
+                recurrence_day_of_month=recurrence_day_of_month,
+                tags=tags or []
             )
 
-            # Use TaskService to create the task - the service handles adding the user_id
-            from src.services.task_service import TaskService
-            created_task = await TaskService.create_task(
-                session,
-                user_uuid,
-                task_create
-            )
+            created_task = await TaskService.create_task(session, user_uuid, task_create)
 
             return {
                 "success": True,
                 "task_id": str(created_task.id),
-                "message": f"Task '{created_task.title}' has been created"
+                "message": f"Task '{created_task.title}' has been created",
+                "task": {
+                    "id": str(created_task.id),
+                    "title": created_task.title,
+                    "priority": created_task.priority,
+                    "status": created_task.status,
+                    "recurrence": created_task.recurrence,
+                    "tags": created_task.tags
+                }
             }
-
     except ValueError:
-        # UUID conversion failed
+        return {
+            "success": False,
+            "error_code": INVALID_INPUT,
+            "message": ERROR_MESSAGES[INVALID_INPUT]
+        }
+    except SQLAlchemyError:
+        return {
+            "success": False,
+            "error_code": DATABASE_ERROR,
+            "message": ERROR_MESSAGES[DATABASE_ERROR]
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error_code": "UNKNOWN_ERROR",
+            "message": f"An unexpected error occurred: {str(e)}"
+        }
+
+
+async def list_tasks(user_id: str, status: str = "all", priority: Optional[str] = None,
+                    has_recurrence: Optional[bool] = None, limit: int = 20, offset: int = 0) -> Dict[str, Any]:
+    """
+    List all tasks for the authenticated user with advanced filtering.
+
+    Args:
+        user_id: The authenticated user's ID (from JWT token)
+        status: Filter by status ('all', 'pending', 'in_progress', 'completed')
+        priority: Filter by priority (High, Medium, Low)
+        has_recurrence: Filter tasks with/without recurrence
+        limit: Maximum number of tasks to return
+        offset: Offset for pagination
+
+    Returns:
+        Dict with success status and list of tasks
+    """
+    try:
+        user_uuid = UUID(user_id)
+        session_factory = get_async_session_factory()
+
+        async with session_factory() as session:
+            # Use the service's filter method
+            tasks = await TaskService.get_user_tasks_with_filters(
+                session=session,
+                user_id=user_uuid,
+                status=status if status != "all" else None,
+                priority=priority,
+                has_recurrence=has_recurrence
+            )
+
+            # Apply pagination
+            paginated_tasks = tasks[offset:offset + limit]
+
+            # Convert tasks to dictionaries
+            task_list = []
+            for task in paginated_tasks:
+                task_dict = {
+                    "id": str(task.id),
+                    "title": task.title,
+                    "description": task.description or "",
+                    "status": task.status,
+                    "priority": task.priority,
+                    "completed": task.status == "completed",
+                    "due_date": task.due_date.isoformat() if task.due_date else None,
+                    "recurrence": task.recurrence,
+                    "recurrence_day_of_week": task.recurrence_day_of_week,
+                    "recurrence_day_of_month": task.recurrence_day_of_month,
+                    "tags": task.tags or [],
+                    "created_at": task.created_at.isoformat(),
+                    "updated_at": task.updated_at.isoformat() if task.updated_at else task.created_at.isoformat(),
+                    "user_id": str(task.user_id)
+                }
+                task_list.append(task_dict)
+
+            return {
+                "success": True,
+                "tasks": task_list,
+                "total_count": len(tasks),
+                "returned_count": len(task_list),
+                "message": f"Retrieved {len(task_list)} tasks for user"
+            }
+    except ValueError:
         return {
             "success": False,
             "error_code": INVALID_INPUT,
@@ -101,24 +189,13 @@ async def complete_task(user_id: str, task_id: str) -> Dict[str, Any]:
         Dict with success status and completion details
     """
     try:
-        # Convert user_id and task_id to UUIDs
         user_uuid = UUID(user_id)
         task_uuid = UUID(task_id)
-
-        # Create async session using the session factory approach
-        from src.utils.database import get_async_session_factory
         session_factory = get_async_session_factory()
 
-        # Create a session instance using the factory
         async with session_factory() as session:
-            # Update the task with completed status
-            task_update = TaskUpdate(completed=True)
-            updated_task = await TaskService.update_task(
-                session,
-                user_uuid,
-                task_uuid,
-                task_update
-            )
+            task_update = TaskUpdate(status="completed")
+            updated_task = await TaskService.update_task(session, user_uuid, task_uuid, task_update)
 
             if not updated_task:
                 return {
@@ -129,98 +206,14 @@ async def complete_task(user_id: str, task_id: str) -> Dict[str, Any]:
 
             return {
                 "success": True,
-                "message": f"Task '{updated_task.title}' has been marked as completed"
-            }
-
-    except ValueError:
-        # UUID conversion failed
-        return {
-            "success": False,
-            "error_code": INVALID_INPUT,
-            "message": ERROR_MESSAGES[INVALID_INPUT]
-        }
-    except SQLAlchemyError:
-        return {
-            "success": False,
-            "error_code": DATABASE_ERROR,
-            "message": ERROR_MESSAGES[DATABASE_ERROR]
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error_code": "UNKNOWN_ERROR",
-            "message": f"An unexpected error occurred: {str(e)}"
-        }
-
-
-async def list_tasks(user_id: str, status: str = "all", limit: int = 20, offset: int = 0) -> Dict[str, Any]:
-    """
-    List all tasks for the authenticated user.
-
-    Args:
-        user_id: The authenticated user's ID (from JWT token)
-        status: Filter by status ('all', 'pending', 'completed')
-        limit: Maximum number of tasks to return
-        offset: Offset for pagination
-
-    Returns:
-        Dict with success status and list of tasks
-    """
-    try:
-        # Convert user_id to UUID
-        user_uuid = UUID(user_id)
-
-        # Create async session using the session factory approach
-        from src.utils.database import get_async_session_factory
-        session_factory = get_async_session_factory()
-
-        # Create a session instance using the factory
-        async with session_factory() as session:
-            # Get all tasks for the user
-            user_tasks = await TaskService.get_user_tasks(session, user_uuid)
-
-            # Apply status filter if needed
-            if status != "all":
-                if status == "completed":
-                    filtered_tasks = [task for task in user_tasks if task.completed]
-                elif status == "pending":
-                    filtered_tasks = [task for task in user_tasks if not task.completed]
-                else:
-                    # Invalid status, return error
-                    return {
-                        "success": False,
-                        "error_code": INVALID_INPUT,
-                        "message": "Invalid status parameter. Use 'all', 'pending', or 'completed'."
-                    }
-            else:
-                filtered_tasks = user_tasks
-
-            # Apply pagination
-            paginated_tasks = filtered_tasks[offset:offset + limit]
-
-            # Convert tasks to dictionaries
-            task_list = []
-            for task in paginated_tasks:
-                task_dict = {
-                    "id": str(task.id),
-                    "title": task.title,
-                    "description": task.description or "",
-                    "completed": task.completed,
-                    "created_at": task.created_at.isoformat(),
-                    "updated_at": task.updated_at.isoformat() if task.updated_at else task.created_at.isoformat(),
-                    "user_id": str(task.user_id)
+                "message": f"Task '{updated_task.title}' has been marked as completed",
+                "task": {
+                    "id": str(updated_task.id),
+                    "title": updated_task.title,
+                    "status": updated_task.status
                 }
-                task_list.append(task_dict)
-
-            return {
-                "success": True,
-                "tasks": task_list,
-                "total_count": len(filtered_tasks),
-                "message": f"Retrieved {len(task_list)} tasks for user"
             }
-
     except ValueError:
-        # UUID conversion failed
         return {
             "success": False,
             "error_code": INVALID_INPUT,
@@ -241,8 +234,9 @@ async def list_tasks(user_id: str, status: str = "all", limit: int = 20, offset:
 
 
 async def update_task(user_id: str, task_id: str, title: Optional[str] = None,
-                     description: Optional[str] = None, due_date: Optional[str] = None,
-                     status: Optional[str] = None) -> Dict[str, Any]:
+                     description: Optional[str] = None, priority: Optional[str] = None,
+                     status: Optional[str] = None, due_date: Optional[str] = None,
+                     tags: Optional[List[str]] = None) -> Dict[str, Any]:
     """
     Update task properties for the authenticated user.
 
@@ -251,14 +245,15 @@ async def update_task(user_id: str, task_id: str, title: Optional[str] = None,
         task_id: The ID of the task to update
         title: New title for the task (optional)
         description: New description for the task (optional)
-        due_date: New due date for the task (optional)
+        priority: New priority for the task (optional)
         status: New status for the task (optional)
+        due_date: New due date for the task (optional)
+        tags: New tags for the task (optional)
 
     Returns:
         Dict with success status and update details
     """
     try:
-        # Convert user_id and task_id to UUIDs
         user_uuid = UUID(user_id)
         task_uuid = UUID(task_id)
 
@@ -268,29 +263,20 @@ async def update_task(user_id: str, task_id: str, title: Optional[str] = None,
             update_data["title"] = title
         if description is not None:
             update_data["description"] = description
+        if priority is not None:
+            update_data["priority"] = priority
         if status is not None:
-            # Map status string to boolean for completed field
-            if status == "completed":
-                update_data["completed"] = True
-            elif status == "pending":
-                update_data["completed"] = False
+            update_data["status"] = status
+        if due_date is not None:
+            update_data["due_date"] = due_date
+        if tags is not None:
+            update_data["tags"] = tags
 
-        # Create TaskUpdate object with the data
         task_update = TaskUpdate(**update_data)
-
-        # Create async session using the session factory approach
-        from src.utils.database import get_async_session_factory
         session_factory = get_async_session_factory()
 
-        # Create a session instance using the factory
         async with session_factory() as session:
-            # Update the task
-            updated_task = await TaskService.update_task(
-                session,
-                user_uuid,
-                task_uuid,
-                task_update
-            )
+            updated_task = await TaskService.update_task(session, user_uuid, task_uuid, task_update)
 
             if not updated_task:
                 return {
@@ -301,11 +287,16 @@ async def update_task(user_id: str, task_id: str, title: Optional[str] = None,
 
             return {
                 "success": True,
-                "message": f"Task '{updated_task.title}' has been updated"
+                "message": f"Task '{updated_task.title}' has been updated",
+                "task": {
+                    "id": str(updated_task.id),
+                    "title": updated_task.title,
+                    "priority": updated_task.priority,
+                    "status": updated_task.status,
+                    "tags": updated_task.tags
+                }
             }
-
     except ValueError:
-        # UUID conversion failed
         return {
             "success": False,
             "error_code": INVALID_INPUT,
@@ -337,22 +328,12 @@ async def delete_task(user_id: str, task_id: str) -> Dict[str, Any]:
         Dict with success status
     """
     try:
-        # Convert user_id and task_id to UUIDs
         user_uuid = UUID(user_id)
         task_uuid = UUID(task_id)
-
-        # Create async session using the session factory approach
-        from src.utils.database import get_async_session_factory
         session_factory = get_async_session_factory()
 
-        # Create a session instance using the factory
         async with session_factory() as session:
-            # Delete the task
-            success = await TaskService.delete_task(
-                session,
-                user_uuid,
-                task_uuid
-            )
+            success = await TaskService.delete_task(session, user_uuid, task_uuid)
 
             if not success:
                 return {
@@ -365,9 +346,7 @@ async def delete_task(user_id: str, task_id: str) -> Dict[str, Any]:
                 "success": True,
                 "message": "Task has been deleted"
             }
-
     except ValueError:
-        # UUID conversion failed
         return {
             "success": False,
             "error_code": INVALID_INPUT,
@@ -388,9 +367,10 @@ async def delete_task(user_id: str, task_id: str) -> Dict[str, Any]:
 
 
 # JSON Schema definitions for MCP tools
+
 ADD_TASK_SCHEMA = {
     "name": "add_task",
-    "description": "Add a new task for the authenticated user",
+    "description": "Add a new task with support for priority, recurrence, and tags",
     "parameters": {
         "type": "object",
         "properties": {
@@ -406,10 +386,37 @@ ADD_TASK_SCHEMA = {
                 "type": "string",
                 "description": "Optional task description"
             },
+            "priority": {
+                "type": "string",
+                "enum": ["High", "Medium", "Low"],
+                "description": "Task priority (default: Medium)"
+            },
             "due_date": {
                 "type": "string",
                 "format": "date-time",
-                "description": "Optional due date for the task in ISO format"
+                "description": "Optional due date in ISO format"
+            },
+            "recurrence": {
+                "type": "string",
+                "enum": ["Daily", "Weekly", "Monthly"],
+                "description": "Optional recurrence pattern"
+            },
+            "recurrence_day_of_week": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 6,
+                "description": "Day of week for weekly recurrence (0=Monday, 6=Sunday)"
+            },
+            "recurrence_day_of_month": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 31,
+                "description": "Day of month for monthly recurrence"
+            },
+            "tags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Optional list of tags"
             }
         },
         "required": ["user_id", "title"]
@@ -418,7 +425,7 @@ ADD_TASK_SCHEMA = {
 
 LIST_TASKS_SCHEMA = {
     "name": "list_tasks",
-    "description": "List all tasks for the authenticated user",
+    "description": "List all tasks with advanced filtering by status, priority, and recurrence",
     "parameters": {
         "type": "object",
         "properties": {
@@ -428,21 +435,30 @@ LIST_TASKS_SCHEMA = {
             },
             "status": {
                 "type": "string",
-                "enum": ["all", "pending", "completed"],
+                "enum": ["all", "pending", "in_progress", "completed"],
                 "description": "Filter tasks by status (default: all)"
+            },
+            "priority": {
+                "type": "string",
+                "enum": ["High", "Medium", "Low"],
+                "description": "Filter tasks by priority"
+            },
+            "has_recurrence": {
+                "type": "boolean",
+                "description": "Filter tasks with/without recurrence"
             },
             "limit": {
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 100,
                 "default": 20,
-                "description": "Maximum number of tasks to return (default: 20)"
+                "description": "Maximum number of tasks to return"
             },
             "offset": {
                 "type": "integer",
                 "minimum": 0,
                 "default": 0,
-                "description": "Offset for pagination (default: 0)"
+                "description": "Offset for pagination"
             }
         },
         "required": ["user_id"]
@@ -451,7 +467,7 @@ LIST_TASKS_SCHEMA = {
 
 COMPLETE_TASK_SCHEMA = {
     "name": "complete_task",
-    "description": "Mark a task as completed for the authenticated user",
+    "description": "Mark a task as completed",
     "parameters": {
         "type": "object",
         "properties": {
@@ -470,7 +486,7 @@ COMPLETE_TASK_SCHEMA = {
 
 UPDATE_TASK_SCHEMA = {
     "name": "update_task",
-    "description": "Update task properties for the authenticated user",
+    "description": "Update task properties including priority, status, and tags",
     "parameters": {
         "type": "object",
         "properties": {
@@ -484,16 +500,31 @@ UPDATE_TASK_SCHEMA = {
             },
             "title": {
                 "type": "string",
-                "description": "New title for the task (optional)"
+                "description": "New title for the task"
             },
             "description": {
                 "type": "string",
-                "description": "New description for the task (optional)"
+                "description": "New description for the task"
+            },
+            "priority": {
+                "type": "string",
+                "enum": ["High", "Medium", "Low"],
+                "description": "New priority for the task"
             },
             "status": {
                 "type": "string",
-                "enum": ["pending", "completed"],
-                "description": "New status for the task (optional)"
+                "enum": ["pending", "in_progress", "completed"],
+                "description": "New status for the task"
+            },
+            "due_date": {
+                "type": "string",
+                "format": "date-time",
+                "description": "New due date for the task"
+            },
+            "tags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "New tags for the task"
             }
         },
         "required": ["user_id", "task_id"]
@@ -502,7 +533,7 @@ UPDATE_TASK_SCHEMA = {
 
 DELETE_TASK_SCHEMA = {
     "name": "delete_task",
-    "description": "Delete a task for the authenticated user",
+    "description": "Delete a task",
     "parameters": {
         "type": "object",
         "properties": {
@@ -519,27 +550,34 @@ DELETE_TASK_SCHEMA = {
     }
 }
 
+SEARCH_TASKS_SCHEMA = {
+    "name": "search_tasks",
+    "description": "Search tasks by title (partial match, case-insensitive)",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "user_id": {
+                "type": "string",
+                "description": "Authenticated user's ID (automatically injected)"
+            },
+            "query": {
+                "type": "string",
+                "description": "Search query to match against task titles"
+            },
+            "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50,
+                "default": 10,
+                "description": "Maximum number of results to return (default: 10)"
+            }
+        },
+        "required": ["user_id", "query"]
+    }
+}
 
-def validate_and_run_async(coro):
-    """
-    Helper function to run async functions with validation.
-    In a real implementation, this would be handled by the MCP framework.
-    """
-    try:
-        loop = asyncio.get_running_loop()
-        # If we're already in a loop, we need to run the coroutine in the existing loop
-        # We'll use asyncio.create_task to schedule the coroutine and await its result
-        import asyncio
-        import inspect
 
-        # If called from sync context inside an async context, we need to await
-        # However, since this is called from a FastAPI endpoint that is already async,
-        # we should return the coroutine to be awaited by the caller
-        return coro
-    except RuntimeError:
-        # No event loop running, safe to create one
-        return asyncio.run(coro)
-
+# Authentication helper
 
 def verify_tool_authentication(params: Dict[str, Any]) -> str:
     """
@@ -552,388 +590,28 @@ def verify_tool_authentication(params: Dict[str, Any]) -> str:
         str: The validated user_id
 
     Raises:
-        Exception: If authentication is missing or invalid
+        ValueError: If authentication is missing or invalid
     """
     user_id = params.get("user_id")
-
     if not user_id:
         raise ValueError("Authentication context missing: user_id is required for all MCP tools")
-
-    # Additional validation could happen here
-
     return user_id
 
 
-async def complete_task(user_id: str, task_id: str) -> Dict[str, Any]:
-    """
-    Mark a task as completed for the authenticated user.
-
-    Args:
-        user_id: The authenticated user's ID (from JWT token)
-        task_id: The ID of the task to complete
-
-    Returns:
-        Dict with success status and completion details
-    """
-    try:
-        # Convert user_id to UUID
-        user_uuid = UUID(user_id)
-        task_uuid = UUID(task_id)
-
-        # Create async session using the session factory approach
-        from src.utils.database import get_async_session_factory
-        session_factory = get_async_session_factory()
-
-        # Create a session instance using the factory
-        async with session_factory() as session:
-            # Update the task with completed status
-            task_update = TaskUpdate(completed=True)
-            updated_task = await TaskService.update_task(
-                session,
-                user_uuid,
-                task_uuid,
-                task_update
-            )
-
-            if not updated_task:
-                return {
-                    "success": False,
-                    "error_code": TASK_NOT_FOUND,
-                    "message": ERROR_MESSAGES[TASK_NOT_FOUND]
-                }
-
-            return {
-                "success": True,
-                "message": f"Task '{updated_task.title}' has been marked as completed"
-            }
-
-    except ValueError:
-        # UUID conversion failed
-        return {
-            "success": False,
-            "error_code": INVALID_INPUT,
-            "message": ERROR_MESSAGES[INVALID_INPUT]
-        }
-    except SQLAlchemyError:
-        return {
-            "success": False,
-            "error_code": DATABASE_ERROR,
-            "message": ERROR_MESSAGES[DATABASE_ERROR]
-        }
-    except ValueError:
-        # UUID conversion failed
-        return {
-            "success": False,
-            "error_code": INVALID_INPUT,
-            "message": ERROR_MESSAGES[INVALID_INPUT]
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error_code": "UNKNOWN_ERROR",
-            "message": f"An unexpected error occurred: {str(e)}"
-        }
-    except SQLAlchemyError:
-        return {
-            "success": False,
-            "error_code": DATABASE_ERROR,
-            "message": ERROR_MESSAGES[DATABASE_ERROR]
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error_code": "UNKNOWN_ERROR",
-            "message": f"An unexpected error occurred: {str(e)}"
-        }
-
-
-async def list_tasks(user_id: str, status: str = "all", limit: int = 20, offset: int = 0) -> Dict[str, Any]:
-    """
-    List all tasks for the authenticated user.
-
-    Args:
-        user_id: The authenticated user's ID (from JWT token)
-        status: Filter by status ('all', 'pending', 'completed')
-        limit: Maximum number of tasks to return
-        offset: Offset for pagination
-
-    Returns:
-        Dict with success status and list of tasks
-    """
-    try:
-        # Convert user_id to UUID
-        user_uuid = UUID(user_id)
-
-        # Create async session using the session factory approach
-        from src.utils.database import get_async_session_factory
-        session_factory = get_async_session_factory()
-
-        # Create a session instance using the factory
-        async with session_factory() as session:
-            # Get all tasks for the user
-            user_tasks = await TaskService.get_user_tasks(session, user_uuid)
-
-            # Apply status filter if needed
-            if status != "all":
-                if status == "completed":
-                    filtered_tasks = [task for task in user_tasks if task.completed]
-                elif status == "pending":
-                    filtered_tasks = [task for task in user_tasks if not task.completed]
-                else:
-                    # Invalid status, return error
-                    return {
-                        "success": False,
-                        "error_code": INVALID_INPUT,
-                        "message": "Invalid status parameter. Use 'all', 'pending', or 'completed'."
-                    }
-            else:
-                filtered_tasks = user_tasks
-
-            # Apply pagination
-            paginated_tasks = filtered_tasks[offset:offset + limit]
-
-            # Convert tasks to dictionaries
-            task_list = []
-            for task in paginated_tasks:
-                task_dict = {
-                    "id": str(task.id),
-                    "title": task.title,
-                    "description": task.description,
-                    "completed": task.completed,
-                    "created_at": task.created_at.isoformat(),
-                    "updated_at": task.updated_at.isoformat(),
-                    "user_id": str(task.user_id)
-                }
-                task_list.append(task_dict)
-
-            return {
-                "success": True,
-                "tasks": task_list,
-                "total_count": len(filtered_tasks),
-                "message": f"Retrieved {len(task_list)} tasks for user"
-            }
-
-    except ValueError:
-        # UUID conversion failed
-        return {
-            "success": False,
-            "error_code": INVALID_INPUT,
-            "message": ERROR_MESSAGES[INVALID_INPUT]
-        }
-    except SQLAlchemyError:
-        return {
-            "success": False,
-            "error_code": DATABASE_ERROR,
-            "message": ERROR_MESSAGES[DATABASE_ERROR]
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error_code": "UNKNOWN_ERROR",
-            "message": f"An unexpected error occurred: {str(e)}"
-        }
-
-
-async def update_task(user_id: str, task_id: str, title: Optional[str] = None,
-                     description: Optional[str] = None, due_date: Optional[str] = None,
-                     status: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Update task properties for the authenticated user.
-
-    Args:
-        user_id: The authenticated user's ID (from JWT token)
-        task_id: The ID of the task to update
-        title: New title for the task (optional)
-        description: New description for the task (optional)
-        due_date: New due date for the task (optional)
-        status: New status for the task (optional)
-
-    Returns:
-        Dict with success status and updated task
-    """
-    try:
-        # Convert user_id and task_id to UUIDs
-        user_uuid = UUID(user_id)
-        task_uuid = UUID(task_id)
-
-        # Prepare update data
-        update_data = {}
-        if title is not None:
-            update_data["title"] = title
-        if description is not None:
-            update_data["description"] = description
-        if status is not None:
-            # Map status string to boolean for completed field
-            if status == "completed":
-                update_data["completed"] = True
-            elif status == "pending":
-                update_data["completed"] = False
-
-        # Create TaskUpdate object with the data
-        task_update = TaskUpdate(**update_data)
-
-        # Create async session using the session factory approach
-        from src.utils.database import get_async_session_factory
-        session_factory = get_async_session_factory()
-
-        # Create a session instance using the factory
-        async with session_factory() as session:
-            # Update the task
-            updated_task = await TaskService.update_task(
-                session,
-                user_uuid,
-                task_uuid,
-                task_update
-            )
-
-            if not updated_task:
-                return {
-                    "success": False,
-                    "error_code": TASK_NOT_FOUND,
-                    "message": ERROR_MESSAGES[TASK_NOT_FOUND]
-                }
-
-            return {
-                "success": True,
-                "message": f"Task '{updated_task.title}' has been updated"
-            }
-
-    except ValueError:
-        # UUID conversion failed
-        return {
-            "success": False,
-            "error_code": INVALID_INPUT,
-            "message": ERROR_MESSAGES[INVALID_INPUT]
-        }
-    except SQLAlchemyError:
-        return {
-            "success": False,
-            "error_code": DATABASE_ERROR,
-            "message": ERROR_MESSAGES[DATABASE_ERROR]
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error_code": "UNKNOWN_ERROR",
-            "message": f"An unexpected error occurred: {str(e)}"
-        }
-
-
-async def delete_task(user_id: str, task_id: str) -> Dict[str, Any]:
-    """
-    Delete a task for the authenticated user.
-
-    Args:
-        user_id: The authenticated user's ID (from JWT token)
-        task_id: The ID of the task to delete
-
-    Returns:
-        Dict with success status
-    """
-    try:
-        # Convert user_id and task_id to UUIDs
-        user_uuid = UUID(user_id)
-        task_uuid = UUID(task_id)
-
-        # Create async session using the session factory approach
-        from src.utils.database import get_async_session_factory
-        session_factory = get_async_session_factory()
-
-        # Create a session instance using the factory
-        async with session_factory() as session:
-            # Delete the task
-            success = await TaskService.delete_task(
-                session,
-                user_uuid,
-                task_uuid
-            )
-
-            if not success:
-                return {
-                    "success": False,
-                    "error_code": TASK_NOT_FOUND,
-                    "message": ERROR_MESSAGES[TASK_NOT_FOUND]
-                }
-
-            return {
-                "success": True,
-                "message": "Task has been deleted"
-            }
-
-    except ValueError:
-        # UUID conversion failed
-        return {
-            "success": False,
-            "error_code": INVALID_INPUT,
-            "message": ERROR_MESSAGES[INVALID_INPUT]
-        }
-    except SQLAlchemyError:
-        return {
-            "success": False,
-            "error_code": DATABASE_ERROR,
-            "message": ERROR_MESSAGES[DATABASE_ERROR]
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error_code": "UNKNOWN_ERROR",
-            "message": f"An unexpected error occurred: {str(e)}"
-        }
-
-
-async def complete_task_wrapper(params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Wrapper function for the complete_task MCP tool that validates parameters.
-
-    Args:
-        params: Dictionary containing 'user_id' and 'task_id'
-
-    Returns:
-        Result from complete_task with proper error handling
-    """
-    try:
-        user_id = verify_tool_authentication(params)
-        task_id = params.get("task_id")
-
-        if not task_id:
-            return {
-                "success": False,
-                "error_code": INVALID_INPUT,
-                "message": "task_id is a required parameter"
-            }
-
-        # Execute the async function and await the result
-        result = await complete_task(user_id, task_id)
-        return result
-    except ValueError as e:  # Catch ValueError from verify_tool_authentication
-        return {
-            "success": False,
-            "error_code": "AUTHENTICATION_ERROR",
-            "message": f"Authentication error: {str(e)}"
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error_code": "AUTHENTICATION_ERROR",
-            "message": f"Error executing complete_task: {str(e)}"
-        }
-
+# Wrapper functions for MCP tool execution
 
 async def add_task_wrapper(params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Wrapper function for the add_task MCP tool that validates parameters.
-
-    Args:
-        params: Dictionary containing 'user_id', 'title', and optional 'description', 'due_date'
-
-    Returns:
-        Result from add_task with proper error handling
-    """
+    """Wrapper function for the add_task MCP tool that validates parameters."""
     try:
         user_id = verify_tool_authentication(params)
         title = params.get("title")
         description = params.get("description", "")
+        priority = params.get("priority")
         due_date = params.get("due_date")
+        recurrence = params.get("recurrence")
+        recurrence_day_of_week = params.get("recurrence_day_of_week")
+        recurrence_day_of_month = params.get("recurrence_day_of_month")
+        tags = params.get("tags")
 
         if not title:
             return {
@@ -942,10 +620,10 @@ async def add_task_wrapper(params: Dict[str, Any]) -> Dict[str, Any]:
                 "message": "title is a required parameter"
             }
 
-        # Execute the async function and await the result
-        result = await add_task(user_id, title, description, due_date)
+        result = await add_task(user_id, title, description, priority, due_date,
+                               recurrence, recurrence_day_of_week, recurrence_day_of_month, tags)
         return result
-    except ValueError as e:  # Catch ValueError from verify_tool_authentication
+    except ValueError as e:
         return {
             "success": False,
             "error_code": "AUTHENTICATION_ERROR",
@@ -954,41 +632,24 @@ async def add_task_wrapper(params: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return {
             "success": False,
-            "error_code": "AUTHENTICATION_ERROR",
+            "error_code": "EXECUTION_ERROR",
             "message": f"Error executing add_task: {str(e)}"
         }
 
 
-def get_add_task_schema() -> Dict[str, Any]:
-    """
-    Returns the JSON Schema definition for the add_task tool.
-
-    Returns:
-        Dict containing the JSON Schema for add_task
-    """
-    return ADD_TASK_SCHEMA
-
-
 async def list_tasks_wrapper(params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Wrapper function for the list_tasks MCP tool that validates parameters.
-
-    Args:
-        params: Dictionary containing 'user_id' and optional filters
-
-    Returns:
-        Result from list_tasks with proper error handling
-    """
+    """Wrapper function for the list_tasks MCP tool that validates parameters."""
     try:
         user_id = verify_tool_authentication(params)
-        status = params.get("status", "all")  # all, pending, completed
+        status = params.get("status", "all")
+        priority = params.get("priority")
+        has_recurrence = params.get("has_recurrence")
         limit = params.get("limit", 20)
         offset = params.get("offset", 0)
 
-        # Execute the async function and await the result
-        result = await list_tasks(user_id, status, limit, offset)
+        result = await list_tasks(user_id, status, priority, has_recurrence, limit, offset)
         return result
-    except ValueError as e:  # Catch ValueError from verify_tool_authentication
+    except ValueError as e:
         return {
             "success": False,
             "error_code": "AUTHENTICATION_ERROR",
@@ -997,40 +658,16 @@ async def list_tasks_wrapper(params: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return {
             "success": False,
-            "error_code": "AUTHENTICATION_ERROR",
+            "error_code": "EXECUTION_ERROR",
             "message": f"Error executing list_tasks: {str(e)}"
         }
 
 
-def get_list_tasks_schema() -> Dict[str, Any]:
-    """
-    Returns the JSON Schema definition for the list_tasks tool.
-
-    Returns:
-        Dict containing the JSON Schema for list_tasks
-    """
-    return LIST_TASKS_SCHEMA
-
-
-async def update_task_wrapper(params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Wrapper function for the update_task MCP tool that validates parameters.
-
-    Args:
-        params: Dictionary containing 'user_id', 'task_id', and optional update fields
-
-    Returns:
-        Result from update_task with proper error handling
-    """
+async def complete_task_wrapper(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Wrapper function for the complete_task MCP tool that validates parameters."""
     try:
         user_id = verify_tool_authentication(params)
         task_id = params.get("task_id")
-
-        # Extract optional update fields
-        title = params.get("title")
-        description = params.get("description")
-        due_date = params.get("due_date")
-        status = params.get("status")
 
         if not task_id:
             return {
@@ -1039,10 +676,9 @@ async def update_task_wrapper(params: Dict[str, Any]) -> Dict[str, Any]:
                 "message": "task_id is a required parameter"
             }
 
-        # Execute the async function and await the result
-        result = await update_task(user_id, task_id, title, description, due_date, status)
+        result = await complete_task(user_id, task_id)
         return result
-    except ValueError as e:  # Catch ValueError from verify_tool_authentication
+    except ValueError as e:
         return {
             "success": False,
             "error_code": "AUTHENTICATION_ERROR",
@@ -1051,31 +687,48 @@ async def update_task_wrapper(params: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return {
             "success": False,
+            "error_code": "EXECUTION_ERROR",
+            "message": f"Error executing complete_task: {str(e)}"
+        }
+
+
+async def update_task_wrapper(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Wrapper function for the update_task MCP tool that validates parameters."""
+    try:
+        user_id = verify_tool_authentication(params)
+        task_id = params.get("task_id")
+        title = params.get("title")
+        description = params.get("description")
+        priority = params.get("priority")
+        status = params.get("status")
+        due_date = params.get("due_date")
+        tags = params.get("tags")
+
+        if not task_id:
+            return {
+                "success": False,
+                "error_code": INVALID_INPUT,
+                "message": "task_id is a required parameter"
+            }
+
+        result = await update_task(user_id, task_id, title, description, priority, status, due_date, tags)
+        return result
+    except ValueError as e:
+        return {
+            "success": False,
             "error_code": "AUTHENTICATION_ERROR",
+            "message": f"Authentication error: {str(e)}"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error_code": "EXECUTION_ERROR",
             "message": f"Error executing update_task: {str(e)}"
         }
 
 
-def get_update_task_schema() -> Dict[str, Any]:
-    """
-    Returns the JSON Schema definition for the update_task tool.
-
-    Returns:
-        Dict containing the JSON Schema for update_task
-    """
-    return UPDATE_TASK_SCHEMA
-
-
 async def delete_task_wrapper(params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Wrapper function for the delete_task MCP tool that validates parameters.
-
-    Args:
-        params: Dictionary containing 'user_id' and 'task_id'
-
-    Returns:
-        Result from delete_task with proper error handling
-    """
+    """Wrapper function for the delete_task MCP tool that validates parameters."""
     try:
         user_id = verify_tool_authentication(params)
         task_id = params.get("task_id")
@@ -1087,10 +740,9 @@ async def delete_task_wrapper(params: Dict[str, Any]) -> Dict[str, Any]:
                 "message": "task_id is a required parameter"
             }
 
-        # Execute the async function and await the result
         result = await delete_task(user_id, task_id)
         return result
-    except ValueError as e:  # Catch ValueError from verify_tool_authentication
+    except ValueError as e:
         return {
             "success": False,
             "error_code": "AUTHENTICATION_ERROR",
@@ -1099,26 +751,110 @@ async def delete_task_wrapper(params: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return {
             "success": False,
-            "error_code": "AUTHENTICATION_ERROR",
+            "error_code": "EXECUTION_ERROR",
             "message": f"Error executing delete_task: {str(e)}"
         }
 
 
-def get_delete_task_schema() -> Dict[str, Any]:
+async def search_tasks(user_id: str, query: str, limit: int = 10) -> Dict[str, Any]:
     """
-    Returns the JSON Schema definition for the delete_task tool.
+    Search tasks by title (partial match) for the authenticated user.
+
+    Args:
+        user_id: The authenticated user's ID (from JWT token)
+        query: Search query to match against task titles
+        limit: Maximum number of results to return
 
     Returns:
-        Dict containing the JSON Schema for delete_task
+        Dict with success status and matching tasks
     """
-    return DELETE_TASK_SCHEMA
+    try:
+        user_uuid = UUID(user_id)
+        session_factory = get_async_session_factory()
+
+        async with session_factory() as session:
+            # Get all tasks for the user
+            tasks = await TaskService.get_user_tasks(session, user_uuid)
+
+            # Filter tasks by title (case-insensitive partial match)
+            query_lower = query.lower()
+            matching_tasks = [
+                task for task in tasks
+                if query_lower in task.title.lower()
+            ]
+
+            # Limit results
+            matching_tasks = matching_tasks[:limit]
+
+            # Convert tasks to dictionaries
+            task_list = []
+            for task in matching_tasks:
+                task_dict = {
+                    "id": str(task.id),
+                    "title": task.title,
+                    "description": task.description or "",
+                    "status": task.status,
+                    "priority": task.priority,
+                    "completed": task.status == "completed",
+                    "due_date": task.due_date.isoformat() if task.due_date else None,
+                    "recurrence": task.recurrence,
+                    "tags": task.tags or [],
+                    "created_at": task.created_at.isoformat(),
+                    "updated_at": task.updated_at.isoformat() if task.updated_at else task.created_at.isoformat()
+                }
+                task_list.append(task_dict)
+
+            return {
+                "success": True,
+                "tasks": task_list,
+                "count": len(task_list),
+                "message": f"Found {len(task_list)} tasks matching '{query}'"
+            }
+    except ValueError:
+        return {
+            "success": False,
+            "error_code": INVALID_INPUT,
+            "message": ERROR_MESSAGES[INVALID_INPUT]
+        }
+    except SQLAlchemyError:
+        return {
+            "success": False,
+            "error_code": DATABASE_ERROR,
+            "message": ERROR_MESSAGES[DATABASE_ERROR]
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error_code": "UNKNOWN_ERROR",
+            "message": f"An unexpected error occurred: {str(e)}"
+        }
 
 
-def get_complete_task_schema() -> Dict[str, Any]:
-    """
-    Returns the JSON Schema definition for the complete_task tool.
+async def search_tasks_wrapper(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Wrapper function for the search_tasks MCP tool that validates parameters."""
+    try:
+        user_id = verify_tool_authentication(params)
+        query = params.get("query")
+        limit = params.get("limit", 10)
 
-    Returns:
-        Dict containing the JSON Schema for complete_task
-    """
-    return COMPLETE_TASK_SCHEMA
+        if not query:
+            return {
+                "success": False,
+                "error_code": INVALID_INPUT,
+                "message": "query is a required parameter"
+            }
+
+        result = await search_tasks(user_id, query, limit)
+        return result
+    except ValueError as e:
+        return {
+            "success": False,
+            "error_code": "AUTHENTICATION_ERROR",
+            "message": f"Authentication error: {str(e)}"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error_code": "EXECUTION_ERROR",
+            "message": f"Error executing search_tasks: {str(e)}"
+        }

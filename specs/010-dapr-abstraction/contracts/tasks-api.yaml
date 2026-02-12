@@ -1,0 +1,426 @@
+openapi: 3.0.3
+info:
+  title: Tasks API - Advanced Task Management
+  description: API for task CRUD operations with recurring tasks, priorities, and due dates
+  version: 1.0.0
+  contact:
+    name: AI Todo Backend Team
+
+servers:
+  - url: http://localhost:8000/api
+    description: Local development
+  - url: http://localhost:3500/v1.0/invoke/backend/method/api
+    description: Dapr Service Invocation (from frontend)
+
+security:
+  - BearerAuth: []
+
+paths:
+  /tasks:
+    get:
+      summary: List user's tasks
+      description: Retrieve all tasks for the authenticated user with optional filtering
+      operationId: listTasks
+      tags:
+        - Tasks
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, in_progress, completed, deleted]
+          description: Filter by task status
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [High, Medium, Low]
+          description: Filter by priority level
+        - name: has_recurrence
+          in: query
+          schema:
+            type: boolean
+          description: Filter tasks with recurrence patterns
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 100
+          description: Maximum number of tasks to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Number of tasks to skip for pagination
+      responses:
+        '200':
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Create a new task
+      description: Create a task with optional recurrence pattern, priority, and due date
+      operationId: createTask
+      tags:
+        - Tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCreate'
+      responses:
+        '201':
+          description: Task created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /tasks/{task_id}:
+    get:
+      summary: Get task by ID
+      description: Retrieve a specific task by its ID
+      operationId: getTask
+      tags:
+        - Tasks
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      summary: Update task
+      description: Update task properties (partial update)
+      operationId: updateTask
+      tags:
+        - Tasks
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskUpdate'
+      responses:
+        '200':
+          description: Task updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    delete:
+      summary: Delete task
+      description: Soft delete a task (sets status to deleted)
+      operationId: deleteTask
+      tags:
+        - Tasks
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '204':
+          description: Task deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /tasks/{task_id}/complete:
+    post:
+      summary: Mark task as complete
+      description: Complete a task and trigger recurring task generation if applicable
+      operationId: completeTask
+      tags:
+        - Tasks
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: Task completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task:
+                    $ref: '#/components/schemas/Task'
+                  next_instance:
+                    $ref: '#/components/schemas/Task'
+                    nullable: true
+                    description: Next recurring task instance (if recurrence exists)
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    TaskId:
+      name: task_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Task unique identifier
+
+  schemas:
+    Task:
+      type: object
+      required:
+        - id
+        - user_id
+        - title
+        - status
+        - priority
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        user_id:
+          type: string
+          format: uuid
+          example: "987e6543-e21b-12d3-a456-426614174999"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: "Buy groceries"
+        description:
+          type: string
+          maxLength: 2000
+          nullable: true
+          example: "Milk, eggs, bread, vegetables"
+        status:
+          type: string
+          enum: [pending, in_progress, completed, deleted]
+          example: "pending"
+        priority:
+          type: string
+          enum: [High, Medium, Low]
+          example: "Medium"
+        due_date:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-02-15T10:00:00Z"
+        recurrence:
+          type: string
+          enum: [Daily, Weekly, Monthly]
+          nullable: true
+          example: "Daily"
+        recurrence_day_of_week:
+          type: integer
+          minimum: 0
+          maximum: 6
+          nullable: true
+          description: "0=Monday, 6=Sunday (for Weekly recurrence)"
+          example: 0
+        recurrence_day_of_month:
+          type: integer
+          minimum: 1
+          maximum: 31
+          nullable: true
+          description: "Day of month (for Monthly recurrence)"
+          example: 15
+        tags:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 50
+          maxItems: 10
+          example: ["shopping", "urgent"]
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-02-11T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-02-11T10:30:00Z"
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-02-11T15:00:00Z"
+        parent_task_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: "Parent task ID for recurring task chains"
+          example: "123e4567-e89b-12d3-a456-426614174001"
+
+    TaskCreate:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: "Buy groceries"
+        description:
+          type: string
+          maxLength: 2000
+          example: "Milk, eggs, bread"
+        priority:
+          type: string
+          enum: [High, Medium, Low]
+          default: Medium
+          example: "High"
+        due_date:
+          type: string
+          format: date-time
+          description: "Must be in the future"
+          example: "2026-02-15T10:00:00Z"
+        recurrence:
+          type: string
+          enum: [Daily, Weekly, Monthly]
+          example: "Daily"
+        recurrence_day_of_week:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: "Required for Weekly recurrence"
+          example: 0
+        recurrence_day_of_month:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: "Required for Monthly recurrence"
+          example: 15
+        tags:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 50
+          maxItems: 10
+          example: ["shopping", "urgent"]
+
+    TaskUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+        status:
+          type: string
+          enum: [pending, in_progress, completed, deleted]
+        priority:
+          type: string
+          enum: [High, Medium, Low]
+        due_date:
+          type: string
+          format: date-time
+        recurrence:
+          type: string
+          enum: [Daily, Weekly, Monthly]
+          nullable: true
+          description: "Set to null to disable recurrence"
+        recurrence_day_of_week:
+          type: integer
+          minimum: 0
+          maximum: 6
+        recurrence_day_of_month:
+          type: integer
+          minimum: 1
+          maximum: 31
+        tags:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 50
+          maxItems: 10
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Validation error"
+              details:
+                type: object
+                example: { "title": "Title is required" }
+
+    Unauthorized:
+      description: Missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Unauthorized"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Task not found"

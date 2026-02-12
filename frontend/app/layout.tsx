@@ -23,26 +23,26 @@ const montserrat = Montserrat({
 
 export const metadata: Metadata = {
   title: {
-    default: "Todo App - Manage Your Tasks Efficiently",
-    template: "%s | Todo App"
+    default: "AI Todo App - Smart Task Management with Natural Language | Y-Todo",
+    template: "%s | Y-Todo"
   },
-  description: "Boost your productivity with our intuitive todo application. Manage tasks, track progress, and stay organized.",
-  keywords: ["todo", "productivity", "task management", "organizer"],
+  description: "Manage tasks by simply chatting with AI. Y-Todo understands natural language, auto-prioritizes your day, and learns your patterns. Free forever plan available.",
+  keywords: ["ai todo", "ai task management", "natural language todo", "smart task manager", "ai productivity", "intelligent todo app", "conversational task management", "ai assistant"],
   authors: [{ name: "Ali Askari" }],
   creator: "Ali Askari",
-  publisher: "Ali Askari",
+  publisher: "Y-Todo",
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://todo-app.example.com",
-    title: "Todo App - Manage Your Tasks Efficiently",
-    description: "Boost your productivity with our intuitive todo application. Manage tasks, track progress, and stay organized.",
-    siteName: "Todo App",
+    url: "https://ai-y-todo.vercel.app",
+    title: "AI Todo App - Smart Task Management with Natural Language",
+    description: "Manage tasks by simply chatting with AI. Y-Todo understands natural language, auto-prioritizes your day, and learns your patterns.",
+    siteName: "Y-Todo",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Todo App - Manage Your Tasks Efficiently",
-    description: "Boost your productivity with our intuitive todo application. Manage tasks, track progress, and stay organized.",
+    title: "AI Todo App - Smart Task Management with Natural Language",
+    description: "Manage tasks by simply chatting with AI. Y-Todo understands natural language, auto-prioritizes your day, and learns your patterns.",
   },
 };
 

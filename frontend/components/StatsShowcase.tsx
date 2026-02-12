@@ -149,10 +149,15 @@ export default function StatsShowcase() {
           viewport={{ once: true }}
           transition={{ duration: prefersReducedMotion ? 0 : 0.6 }}
         >
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider mb-4 border border-primary/20">
-            <TrendingUp className="w-3 h-3" />
-            Live Metrics
-          </div>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/5 text-primary text-sm font-bold uppercase tracking-widest mb-6 border border-primary/10 hover:bg-primary/10 transition-colors cursor-default"
+          >
+            <TrendingUp className="w-4 h-4" />
+            Live Stats
+          </motion.div>
           <h2 className="text-3xl md:text-5xl font-black mb-4">Platform Statistics</h2>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto font-light">Real-time usage data from our growing ecosystem.</p>
         </motion.div>

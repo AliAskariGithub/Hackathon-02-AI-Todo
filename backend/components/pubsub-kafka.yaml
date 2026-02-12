@@ -1,0 +1,36 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: pubsub
+  namespace: default
+spec:
+  type: pubsub.in-memory
+  version: v1
+  metadata: []
+---
+# Production Kafka configuration (commented out for local development)
+# apiVersion: dapr.io/v1alpha1
+# kind: Component
+# metadata:
+#   name: pubsub
+#   namespace: default
+# spec:
+#   type: pubsub.kafka
+#   version: v1
+#   metadata:
+#   - name: brokers
+#     secretKeyRef:
+#       name: dapr-secrets
+#       key: KAFKA_BOOTSTRAP_SERVERS
+#   - name: consumerGroup
+#     value: "todo-backend"
+#   - name: clientID
+#     value: "todo-backend-client"
+#   - name: authType
+#     value: "none"
+#   - name: maxMessageBytes
+#     value: "1024000"
+#   - name: consumeRetryInterval
+#     value: "200ms"
+#   - name: version
+#     value: "2.8.0"

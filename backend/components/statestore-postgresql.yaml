@@ -1,0 +1,28 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: statestore
+  namespace: default
+spec:
+  type: state.postgresql
+  version: v1
+  metadata:
+  - name: connectionString
+    secretKeyRef:
+      name: dapr-secrets
+      key: DATABASE_URL
+  - name: tableName
+    value: "dapr_state"
+  - name: keyPrefix
+    value: "todo"
+  - name: actorStateStore
+    value: "false"
+  - name: queryIndexes
+    value: |
+      {
+        "user_id": "TEXT",
+        "status": "TEXT",
+        "priority": "TEXT",
+        "created_at": "TIMESTAMP",
+        "due_date": "TIMESTAMP"
+      }

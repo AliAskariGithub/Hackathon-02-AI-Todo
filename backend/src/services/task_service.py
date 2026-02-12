@@ -16,11 +16,17 @@ class TaskService:
         """Create a new task for a user."""
         logger.info(f"Creating task for user {user_id}")
 
-        # Create task with user_id from path parameter
+        # Create task with all fields from TaskCreate
         task = Task(
             title=task_data.title,
             description=task_data.description,
-            completed=task_data.completed,
+            status=task_data.status,
+            priority=task_data.priority,
+            due_date=task_data.due_date,
+            recurrence=task_data.recurrence,
+            recurrence_day_of_week=task_data.recurrence_day_of_week,
+            recurrence_day_of_month=task_data.recurrence_day_of_month,
+            tags=task_data.tags,
             user_id=user_id
         )
         session.add(task)
@@ -40,6 +46,39 @@ class TaskService:
         tasks = result.scalars().all()
 
         logger.info(f"Found {len(tasks)} tasks for user {user_id}")
+        return tasks
+
+    @staticmethod
+    async def get_user_tasks_with_filters(
+        session: AsyncSession,
+        user_id: UUID,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
+        has_recurrence: Optional[bool] = None
+    ) -> List[Task]:
+        """Get all tasks for a specific user with optional filtering."""
+        logger.info(f"Retrieving tasks for user {user_id} with filters: status={status}, priority={priority}, has_recurrence={has_recurrence}")
+
+        # Start with base query
+        statement = select(Task).where(Task.user_id == user_id)
+
+        # Apply filters if provided
+        if status is not None:
+            statement = statement.where(Task.status == status)
+
+        if priority is not None:
+            statement = statement.where(Task.priority == priority)
+
+        if has_recurrence is not None:
+            if has_recurrence:
+                statement = statement.where(Task.recurrence.isnot(None))
+            else:
+                statement = statement.where(Task.recurrence.is_(None))
+
+        result = await session.execute(statement)
+        tasks = result.scalars().all()
+
+        logger.info(f"Found {len(tasks)} tasks for user {user_id} with applied filters")
         return tasks
 
     @staticmethod

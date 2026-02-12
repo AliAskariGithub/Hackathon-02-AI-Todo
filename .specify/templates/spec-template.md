@@ -85,7 +85,7 @@
 ### Functional Requirements
 
 - **FR-001**: System MUST [specific capability, e.g., "allow users to create accounts"]
-- **FR-002**: System MUST [specific capability, e.g., "validate email addresses"]  
+- **FR-002**: System MUST [specific capability, e.g., "validate email addresses"]
 - **FR-003**: Users MUST be able to [key interaction, e.g., "reset their password"]
 - **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
 - **FR-005**: System MUST [behavior, e.g., "log all security events"]
@@ -94,6 +94,23 @@
 
 - **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
 - **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
+
+### Event-Driven Requirements (Phase-V) *(include if feature involves asynchronous operations)*
+
+> **Fill ONLY if feature requires event-driven patterns, Dapr, or Kafka**
+
+- **EDR-001**: System MUST publish `[event-type]` event when [trigger condition]
+- **EDR-002**: System MUST subscribe to `[event-type]` event and [action to perform]
+- **EDR-003**: Events MUST include correlation IDs for distributed tracing
+- **EDR-004**: System MUST handle event delivery failures with [retry strategy/dead letter queue]
+- **EDR-005**: System MUST use Dapr [building block] for [specific capability]
+
+*Example of event-driven requirements:*
+
+- **EDR-001**: System MUST publish `todo.task.created` event when a new task is created
+- **EDR-002**: Notification service MUST subscribe to `todo.task.created` and send user notification
+- **EDR-003**: System MUST use Dapr Jobs API for scheduled task reminders (no polling-based cron)
+- **EDR-004**: System MUST access secrets exclusively via Dapr Secrets API
 
 ### Key Entities *(include if feature involves data)*
 

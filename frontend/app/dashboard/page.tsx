@@ -10,7 +10,11 @@ import { PageWrapper } from '@/components/ui/page-wrapper';
 import { SummaryCards } from '@/components/dashboard/summary-cards';
 import { FloatingActionButton } from '@/components/ui/floating-action-button';
 import { CreateTaskDialog } from '@/components/tasks/create-task-dialog';
+import { EditTaskDialog } from '@/components/tasks/edit-task-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { BulkActionsToolbar } from '@/components/dashboard/bulk-actions-toolbar';
+import { DeadlinesWidget } from '@/components/dashboard/deadlines-widget';
+import { ProductivityCharts } from '@/components/dashboard/productivity-charts';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import {
@@ -25,7 +29,10 @@ import {
   Maximize2,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Repeat,
+  Tag,
+  Clock
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -43,8 +50,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { SelectSeparator } from '@/components/ui/select';
 
 interface Task {
@@ -52,8 +57,24 @@ interface Task {
   title: string;
   description?: string;
   completed: boolean;
+  status?: string; // 'pending' | 'in_progress' | 'completed' | 'deleted'
+  priority?: string; // 'High' | 'Medium' | 'Low'
+  due_date?: string;
+  recurrence?: string | null; // 'Daily' | 'Weekly' | 'Monthly'
+  recurrence_day_of_week?: number | null;
+  recurrence_day_of_month?: number | null;
+  tags?: string[];
   created_at?: string;
   updated_at?: string;
+  completed_at?: string | null;
+  parent_task_id?: string | null;
+}
+
+interface CompleteTaskResponse {
+  task: Task;
+  message: string;
+  has_recurrence: boolean;
+  next_instance_will_be_generated: boolean;
 }
 
 // API client for backend connection (now uses cookies, no token needed)
@@ -75,6 +96,9 @@ const taskApi = {
       console.error('Error deleting task:', error);
       return { success: false };
     }
+  },
+  completeTask: async (userId: string, taskId: string): Promise<CompleteTaskResponse> => {
+    return apiClient.post<CompleteTaskResponse>(`/api/${userId}/tasks/${taskId}/complete`, {});
   }
 };
 
@@ -96,6 +120,7 @@ export default function DashboardPage() {
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
+  const [recurrenceFilter, setRecurrenceFilter] = useState<'all' | 'recurring' | 'Daily' | 'Weekly' | 'Monthly'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'created_at' | 'updated_at' | 'title'>('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -104,6 +129,14 @@ export default function DashboardPage() {
   const [fullscreenTask, setFullscreenTask] = useState<Task | null>(null);
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
   const [isFullscreenUpdating, setIsFullscreenUpdating] = useState(false);
+
+  // Bulk operations state
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 15;
 
   // Optimistic updates
   const [optimisticTasks, addOptimisticTask] = useOptimistic(
@@ -165,6 +198,11 @@ export default function DashboardPage() {
       loadTasks();
     }
   }, [session, isLoading, router]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, recurrenceFilter, searchQuery, sortBy, sortOrder]);
 
   // Show loading state while auth is initializing
   if (isLoading) {
@@ -276,29 +314,58 @@ export default function DashboardPage() {
   // Toggle task completion
   const handleToggleTask = async (task: Task) => {
     setUpdatingTaskId(task.id);
-    const updatedTask = { ...task, completed: !task.completed };
-
-    // Optimistically update
-    addOptimisticTask({ type: 'update', data: updatedTask });
+    const isCompleting = !task.completed;
+    const updatedTask = { ...task, completed: isCompleting };
 
     const userId = session?.user?.id;
     if (userId) {
       try {
-        await taskApi.updateTask(userId, task.id, updatedTask);
-        setTasks(prev => prev.map(t => t.id === task.id ? updatedTask : t));
+        // Use completeTask endpoint for completing tasks (triggers recurring generation)
+        if (isCompleting) {
+          // Optimistically update with startTransition
+          startTransition(() => {
+            addOptimisticTask({ type: 'update', data: updatedTask });
+          });
 
-        // Show success toast
-        toast({
-          variant: "success",
-          title: updatedTask.completed ? "Task Completed!" : "Task Reactivated",
-          description: updatedTask.completed
-            ? `"${task.title}" marked as complete.`
-            : `"${task.title}" marked as active.`,
-        });
+          const response = await taskApi.completeTask(userId, task.id);
+          setTasks(prev => prev.map(t => t.id === task.id ? response.task : t));
+
+          // Show success toast with recurring info
+          if (response.has_recurrence && response.next_instance_will_be_generated) {
+            toast({
+              variant: "success",
+              title: "Task Completed! 🔄",
+              description: `"${task.title}" marked as complete. Next ${task.recurrence?.toLowerCase()} instance will be generated.`,
+            });
+          } else {
+            toast({
+              variant: "success",
+              title: "Task Completed!",
+              description: `"${task.title}" marked as complete.`,
+            });
+          }
+        } else {
+          // Use regular update for uncompleting tasks
+          // Optimistically update with startTransition
+          startTransition(() => {
+            addOptimisticTask({ type: 'update', data: updatedTask });
+          });
+
+          await taskApi.updateTask(userId, task.id, updatedTask);
+          setTasks(prev => prev.map(t => t.id === task.id ? updatedTask : t));
+
+          toast({
+            variant: "success",
+            title: "Task Reactivated",
+            description: `"${task.title}" marked as active.`,
+          });
+        }
       } catch (error) {
         console.error('Error updating task:', error);
-        // Revert optimistic update on error
-        addOptimisticTask({ type: 'update', data: task });
+        // Revert optimistic update on error with startTransition
+        startTransition(() => {
+          addOptimisticTask({ type: 'update', data: task });
+        });
 
         toast({
           variant: "destructive",
@@ -354,7 +421,7 @@ export default function DashboardPage() {
   };
 
   // Edit task
-  const handleEditTask = async (taskId: string, updates: { title: string; description?: string }) => {
+  const handleEditTask = async (taskId: string, updates: Partial<Task>) => {
     const userId = session?.user?.id;
     if (userId) {
       try {
@@ -377,8 +444,17 @@ export default function DashboardPage() {
           title: "Update Failed",
           description: "Could not update task. Please try again.",
         });
+      }
+    }
+  };
 
-        throw error;
+  // Handle edit dialog submission
+  const handleEditDialogSubmit = async (taskData: Partial<Task>) => {
+    if (editingTask) {
+      try {
+        await handleEditTask(editingTask.id, taskData);
+      } catch (error) {
+        console.error('Failed to update task:', error);
       }
     }
   };
@@ -398,6 +474,140 @@ export default function DashboardPage() {
   // Toggle sort order
   const toggleSortOrder = () => {
     setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+  };
+
+  // Bulk operations handlers
+  const toggleTaskSelection = (taskId: string) => {
+    setSelectedTaskIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(taskId)) {
+        newSet.delete(taskId);
+      } else {
+        newSet.add(taskId);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllTasks = () => {
+    const allTaskIds = new Set(filteredTasks.map(t => t.id));
+    setSelectedTaskIds(allTaskIds);
+  };
+
+  const clearSelection = () => {
+    setSelectedTaskIds(new Set());
+  };
+
+  const handleBulkComplete = async () => {
+    if (selectedTaskIds.size === 0) return;
+
+    setIsBulkProcessing(true);
+    const userId = session?.user?.id;
+
+    if (userId) {
+      try {
+        const selectedTasks = tasks.filter(t => selectedTaskIds.has(t.id));
+
+        // Complete all selected tasks
+        await Promise.all(
+          selectedTasks.map(task => taskApi.completeTask(userId, task.id))
+        );
+
+        // Reload tasks
+        const loadedTasks = await taskApi.getTasks(userId);
+        setTasks(loadedTasks as Task[]);
+        clearSelection();
+
+        toast({
+          variant: "success",
+          title: "Tasks Completed!",
+          description: `${selectedTaskIds.size} ${selectedTaskIds.size === 1 ? 'task' : 'tasks'} marked as complete.`,
+        });
+      } catch (error) {
+        console.error('Error completing tasks:', error);
+        toast({
+          variant: "destructive",
+          title: "Bulk Complete Failed",
+          description: "Could not complete all tasks. Please try again.",
+        });
+      } finally {
+        setIsBulkProcessing(false);
+      }
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedTaskIds.size === 0) return;
+
+    setIsBulkProcessing(true);
+    const userId = session?.user?.id;
+
+    if (userId) {
+      try {
+        // Delete all selected tasks
+        await Promise.all(
+          Array.from(selectedTaskIds).map(taskId => taskApi.deleteTask(userId, taskId))
+        );
+
+        // Update local state
+        setTasks(prev => prev.filter(t => !selectedTaskIds.has(t.id)));
+        clearSelection();
+
+        toast({
+          variant: "success",
+          title: "Tasks Deleted",
+          description: `${selectedTaskIds.size} ${selectedTaskIds.size === 1 ? 'task' : 'tasks'} removed successfully.`,
+        });
+      } catch (error) {
+        console.error('Error deleting tasks:', error);
+        toast({
+          variant: "destructive",
+          title: "Bulk Delete Failed",
+          description: "Could not delete all tasks. Please try again.",
+        });
+      } finally {
+        setIsBulkProcessing(false);
+      }
+    }
+  };
+
+  const handleBulkSetPriority = async (priority: 'High' | 'Medium' | 'Low') => {
+    if (selectedTaskIds.size === 0) return;
+
+    setIsBulkProcessing(true);
+    const userId = session?.user?.id;
+
+    if (userId) {
+      try {
+        // Update priority for all selected tasks
+        await Promise.all(
+          Array.from(selectedTaskIds).map(taskId =>
+            taskApi.updateTask(userId, taskId, { priority })
+          )
+        );
+
+        // Update local state
+        setTasks(prev => prev.map(t =>
+          selectedTaskIds.has(t.id) ? { ...t, priority } : t
+        ));
+        clearSelection();
+
+        toast({
+          variant: "success",
+          title: "Priority Updated",
+          description: `${selectedTaskIds.size} ${selectedTaskIds.size === 1 ? 'task' : 'tasks'} set to ${priority} priority.`,
+        });
+      } catch (error) {
+        console.error('Error updating priority:', error);
+        toast({
+          variant: "destructive",
+          title: "Bulk Update Failed",
+          description: "Could not update priority for all tasks. Please try again.",
+        });
+      } finally {
+        setIsBulkProcessing(false);
+      }
+    }
   };
 
   // Handle fullscreen task toggle with loading state and toast
@@ -449,6 +659,11 @@ export default function DashboardPage() {
       if (filter === 'completed') return task.completed;
       return true;
     })
+    .filter(task => {
+      if (recurrenceFilter === 'all') return true;
+      if (recurrenceFilter === 'recurring') return task.recurrence !== null && task.recurrence !== undefined;
+      return task.recurrence === recurrenceFilter;
+    })
     .filter(task =>
       task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (task.description && task.description.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -466,6 +681,12 @@ export default function DashboardPage() {
 
       return sortOrder === 'asc' ? comparison : -comparison;
     });
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredTasks.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedTasks = filteredTasks.slice(startIndex, endIndex);
 
   // Calculate statistics
   const totalTasks = optimisticTasks.length;
@@ -583,36 +804,96 @@ export default function DashboardPage() {
           </motion.div>
         </motion.div>
 
-        {/* Summary Cards */}
-        <SummaryCards
-          totalTasks={totalTasks}
-          completedTasks={completedTasks}
-          remainingTasks={remainingTasks}
-          isLoading={isLoadingTasks && optimisticTasks.length === 0}
+        {/* Deadlines Widget */}
+        <DeadlinesWidget
+          tasks={optimisticTasks}
+          onTaskClick={(taskId) => {
+            const task = optimisticTasks.find(t => t.id === taskId);
+            if (task) openFullscreen(task);
+          }}
         />
+
+        {/* Productivity Charts */}
+        <ProductivityCharts tasks={optimisticTasks} />
+
+        {/* Summary Cards */}
+        <div className="mb-8">
+          <SummaryCards
+            totalTasks={totalTasks}
+            completedTasks={completedTasks}
+            remainingTasks={remainingTasks}
+            isLoading={isLoadingTasks && optimisticTasks.length === 0}
+          />
+        </div>
 
         {/* Tasks Grid */}
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold flex items-center gap-2">
-              <ClipboardList className="w-6 h-6 text-primary" />
-              Tasks
-            </h2>
-            <div className="flex gap-2 p-1 bg-muted/30 rounded-lg">
-              {(['all', 'active', 'completed'] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={cn(
-                    "px-4 py-1.5 rounded-md text-sm font-medium transition-all",
-                    filter === f
-                      ? "bg-background shadow text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-4">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <ClipboardList className="w-6 h-6 text-primary" />
+                Tasks
+              </h2>
+              {/* Select All Button */}
+              {filteredTasks.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={selectedTaskIds.size === filteredTasks.length ? clearSelection : selectAllTasks}
+                  className="gap-2"
                 >
-                  {f.charAt(0).toUpperCase() + f.slice(1)}
-                </button>
-              ))}
+                  <CheckCircle2 className="w-4 h-4" />
+                  {selectedTaskIds.size === filteredTasks.length ? 'Deselect All' : 'Select All'}
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-3 flex-wrap">
+              {/* Status Filter */}
+              <div className="flex gap-2 p-1 bg-muted/30 rounded-lg">
+                {(['all', 'active', 'completed'] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={cn(
+                      "px-4 py-1.5 rounded-md text-sm font-medium transition-all",
+                      filter === f
+                        ? "bg-background shadow text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {f.charAt(0).toUpperCase() + f.slice(1)}
+                  </button>
+                ))}
+              </div>
+
+              {/* Recurrence Filter */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <Repeat className="w-4 h-4" />
+                    {recurrenceFilter === 'all' ? 'All Tasks' : recurrenceFilter === 'recurring' ? 'Recurring' : recurrenceFilter}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setRecurrenceFilter('all')}>
+                    All Tasks
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setRecurrenceFilter('recurring')}>
+                    <Repeat className="w-4 h-4 mr-2" />
+                    All Recurring
+                  </DropdownMenuItem>
+                  <SelectSeparator />
+                  <DropdownMenuItem onClick={() => setRecurrenceFilter('Daily')}>
+                    Daily
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setRecurrenceFilter('Weekly')}>
+                    Weekly
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setRecurrenceFilter('Monthly')}>
+                    Monthly
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 
@@ -653,7 +934,7 @@ export default function DashboardPage() {
                   </p>
                 </motion.div>
               ) : (
-                filteredTasks.map((task, index) => (
+                paginatedTasks.map((task, index) => (
                   <motion.div
                     key={task.id}
                     layout
@@ -678,12 +959,22 @@ export default function DashboardPage() {
                       <div className="relative z-10 flex flex-col h-full justify-between gap-4">
                         <div>
                           <div className="flex items-start justify-between gap-3 mb-2">
-                            <h3 className={cn(
-                              "font-semibold text-lg leading-tight transition-all",
-                              task.completed && "line-through text-muted-foreground"
-                            )}>
-                              {task.title}
-                            </h3>
+                            {/* Selection Checkbox */}
+                            <div className="flex items-start gap-3 flex-1 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={selectedTaskIds.has(task.id)}
+                                onChange={() => toggleTaskSelection(task.id)}
+                                className="mt-1 w-4 h-4 rounded border-2 border-primary/30 text-primary focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <h3 className={cn(
+                                "font-semibold text-lg leading-tight transition-all flex-1",
+                                task.completed && "line-through text-muted-foreground"
+                              )}>
+                                {task.title}
+                              </h3>
+                            </div>
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <Button
                                 variant="ghost"
@@ -708,6 +999,69 @@ export default function DashboardPage() {
                               {task.description}
                             </p>
                           )}
+
+                          {/* Metadata Badges */}
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            {/* Priority Badge */}
+                            {task.priority && (
+                              <span className={cn(
+                                "inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium",
+                                task.priority === 'High' && "bg-red-500/10 text-red-500 border border-red-500/20",
+                                task.priority === 'Medium' && "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20",
+                                task.priority === 'Low' && "bg-green-500/10 text-green-500 border border-green-500/20"
+                              )}>
+                                {task.priority}
+                              </span>
+                            )}
+
+                            {/* Recurrence Indicator */}
+                            {task.recurrence && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                                <Repeat className="w-3 h-3" />
+                                {task.recurrence}
+                                {task.recurrence === 'Weekly' && task.recurrence_day_of_week !== null && task.recurrence_day_of_week !== undefined && (
+                                  <span className="ml-1">
+                                    ({['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][task.recurrence_day_of_week!]})
+                                  </span>
+                                )}
+                                {task.recurrence === 'Monthly' && task.recurrence_day_of_month !== null && task.recurrence_day_of_month !== undefined && (
+                                  <span className="ml-1">
+                                    ({task.recurrence_day_of_month!}{task.recurrence_day_of_month === 1 ? 'st' : task.recurrence_day_of_month === 2 ? 'nd' : task.recurrence_day_of_month === 3 ? 'rd' : 'th'})
+                                  </span>
+                                )}
+                              </span>
+                            )}
+
+                            {/* Due Date */}
+                            {task.due_date && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-purple-500/10 text-purple-500 border border-purple-500/20">
+                                <Clock className="w-3 h-3" />
+                                {new Date(task.due_date).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            )}
+
+                            {/* Tags */}
+                            {task.tags && task.tags.length > 0 && (
+                              <>
+                                {task.tags.slice(0, 2).map((tag, idx) => (
+                                  <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-gray-500/10 text-gray-500 border border-gray-500/20">
+                                    <Tag className="w-3 h-3" />
+                                    {tag}
+                                  </span>
+                                ))}
+                                {task.tags.length > 2 && (
+                                  <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-500/10 text-gray-500 border border-gray-500/20">
+                                    +{task.tags.length - 2}
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </div>
                         </div>
 
                         <div className="pt-4 border-t border-white/5 flex items-center justify-between gap-2 mt-auto">
@@ -757,6 +1111,73 @@ export default function DashboardPage() {
               )}
             </AnimatePresence>
           </motion.div>
+
+          {/* Pagination Controls */}
+          {filteredTasks.length > ITEMS_PER_PAGE && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center justify-between mt-8 pt-6 border-t border-border/50"
+            >
+              <div className="text-sm text-muted-foreground">
+                Showing {startIndex + 1}-{Math.min(endIndex, filteredTasks.length)} of {filteredTasks.length} tasks
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="gap-2"
+                >
+                  <ArrowDown className="w-4 h-4 rotate-90" />
+                  Previous
+                </Button>
+
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
+                    // Show first page, last page, current page, and pages around current
+                    const showPage = page === 1 ||
+                                    page === totalPages ||
+                                    Math.abs(page - currentPage) <= 1;
+
+                    const showEllipsis = (page === 2 && currentPage > 3) ||
+                                        (page === totalPages - 1 && currentPage < totalPages - 2);
+
+                    if (showEllipsis) {
+                      return <span key={page} className="px-2 text-muted-foreground">...</span>;
+                    }
+
+                    if (!showPage) return null;
+
+                    return (
+                      <Button
+                        key={page}
+                        variant={currentPage === page ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setCurrentPage(page)}
+                        className="w-9 h-9 p-0"
+                      >
+                        {page}
+                      </Button>
+                    );
+                  })}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="gap-2"
+                >
+                  Next
+                  <ArrowUp className="w-4 h-4 -rotate-270" />
+                </Button>
+              </div>
+            </motion.div>
+          )}
         </div>
       </div>
 
@@ -764,6 +1185,16 @@ export default function DashboardPage() {
       <FloatingActionButton
         onClick={() => setIsCreateDialogOpen(true)}
         label="Create new task"
+      />
+
+      {/* Bulk Actions Toolbar */}
+      <BulkActionsToolbar
+        selectedCount={selectedTaskIds.size}
+        onClearSelection={clearSelection}
+        onBulkComplete={handleBulkComplete}
+        onBulkDelete={handleBulkDelete}
+        onBulkSetPriority={handleBulkSetPriority}
+        isProcessing={isBulkProcessing}
       />
 
       {/* Create Task Dialog */}
@@ -775,61 +1206,13 @@ export default function DashboardPage() {
       />
 
       {/* Edit Task Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Edit Task</DialogTitle>
-            <DialogDescription>
-              Update the task title and description.
-            </DialogDescription>
-          </DialogHeader>
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              const title = formData.get('title') as string;
-              const description = formData.get('description') as string;
-
-              if (editingTask) {
-                try {
-                  await handleEditTask(editingTask.id, { title, description });
-                } catch (error) {
-                  console.error('Failed to update task:', error);
-                }
-              }
-            }}
-          >
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-title">Title</Label>
-                <Input
-                  id="edit-title"
-                  name="title"
-                  defaultValue={editingTask?.title}
-                  placeholder="Task title"
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-description">Description</Label>
-                <Textarea
-                  id="edit-description"
-                  name="description"
-                  defaultValue={editingTask?.description}
-                  placeholder="Task description (optional)"
-                  rows={4}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit">Save Changes</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <EditTaskDialog
+        isOpen={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        onSubmit={handleEditDialogSubmit}
+        task={editingTask}
+        isSubmitting={false}
+      />
 
       {/* Fullscreen Task View Dialog */}
       <Dialog open={isFullscreenOpen} onOpenChange={setIsFullscreenOpen}>
@@ -863,6 +1246,41 @@ export default function DashboardPage() {
 
               {/* Metadata */}
               <div className="grid grid-cols-2 gap-4">
+                {/* Priority */}
+                {fullscreenTask?.priority && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-2">Priority</h3>
+                    <div className="bg-muted/30 rounded-lg p-3">
+                      <div className="flex items-center gap-2">
+                        <div className={cn(
+                          "w-2 h-2 rounded-full",
+                          fullscreenTask.priority === 'High' && "bg-red-500",
+                          fullscreenTask.priority === 'Medium' && "bg-yellow-500",
+                          fullscreenTask.priority === 'Low' && "bg-green-500"
+                        )} />
+                        <span className="text-sm font-medium">{fullscreenTask.priority}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Due Date */}
+                {fullscreenTask?.due_date && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-2">Due Date</h3>
+                    <div className="bg-muted/30 rounded-lg p-3">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-muted-foreground" />
+                        <p className="text-sm">
+                          {new Date(fullscreenTask.due_date).toLocaleDateString('en-US', {
+                            dateStyle: 'medium'
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {fullscreenTask?.created_at && (
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground mb-2">Created</h3>
@@ -891,6 +1309,49 @@ export default function DashboardPage() {
                 )}
               </div>
 
+              {/* Recurrence */}
+              {fullscreenTask?.recurrence && (
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground mb-2">Recurrence</h3>
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <div className="flex items-center gap-2">
+                      <Repeat className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">{fullscreenTask.recurrence}</span>
+                      {fullscreenTask.recurrence === 'Weekly' && typeof fullscreenTask.recurrence_day_of_week === 'number' && (
+                        <span className="text-sm text-muted-foreground">
+                          (Every {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][fullscreenTask.recurrence_day_of_week]})
+                        </span>
+                      )}
+                      {fullscreenTask.recurrence === 'Monthly' && typeof fullscreenTask.recurrence_day_of_month === 'number' && (
+                        <span className="text-sm text-muted-foreground">
+                          (Day {fullscreenTask.recurrence_day_of_month} of each month)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tags */}
+              {fullscreenTask?.tags && fullscreenTask.tags.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground mb-2">Tags</h3>
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <div className="flex flex-wrap gap-2">
+                      {fullscreenTask.tags.map((tag, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary text-xs font-medium"
+                        >
+                          <Tag className="w-3 h-3" />
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Status */}
               <div>
                 <h3 className="text-sm font-semibold text-muted-foreground mb-2">Status</h3>
@@ -900,6 +1361,11 @@ export default function DashboardPage() {
                       <>
                         <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                         <span className="text-sm font-medium text-emerald-600">Completed</span>
+                        {fullscreenTask?.completed_at && (
+                          <span className="text-xs text-muted-foreground ml-2">
+                            on {new Date(fullscreenTask.completed_at).toLocaleDateString('en-US', { dateStyle: 'medium' })}
+                          </span>
+                        )}
                       </>
                     ) : (
                       <>

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, X } from 'lucide-react';
+import { Check, CircleDollarSign, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
@@ -23,44 +23,48 @@ const pricingTiers: PricingTier[] = [
     {
         name: 'Starter',
         price: { monthly: 0, yearly: 0 },
-        description: 'Perfect for individuals just getting started.',
+        description: 'Try AI task management free—forever',
         features: [
-            'Up to 5 Projects',
-            'Basic Task Management',
-            '2GB Storage',
-            'Community Support',
+            'Up to 50 AI conversations/month',
+            '5 Projects with unlimited tasks',
+            'Basic AI suggestions',
+            'Mobile & web access',
+            'Community support',
         ],
         notIncluded: [
-            'Team Collaboration',
-            'Advanced Analytics',
-            'Custom Branding',
+            'Unlimited AI conversations',
+            'Advanced AI prioritization',
+            'Context-aware reminders',
         ],
     },
     {
         name: 'Pro',
         price: { monthly: 15, yearly: 144 },
-        description: 'The best value for power users and creators.',
+        description: 'For power users who want unlimited AI assistance',
         popular: true,
         features: [
-            'Unlimited Projects',
-            'Advanced Task Management',
-            '10GB Storage',
-            'Priority Email Support',
-            'Team Collaboration (up to 5)',
-            'Basic Analytics',
+            'Unlimited AI conversations',
+            'Unlimited projects & tasks',
+            'Advanced AI prioritization & learning',
+            'Context-aware reminders (location-based)',
+            'Priority email support (24h response)',
+            'Calendar integration (Google, Outlook)',
+            'Up to 5 team members',
         ],
     },
     {
         name: 'Business',
         price: { monthly: 49, yearly: 470 },
-        description: 'For teams that need scalable power and security.',
+        description: 'Enterprise-grade for teams & organizations',
         features: [
             'Everything in Pro',
-            'Unlimited Team Members',
-            '1TB Storage',
-            '24/7 Phone Support',
-            'Advanced Analytics & Reporting',
-            'Custom Branding & SSO',
+            'Unlimited team members',
+            'Team AI assistant (shared context)',
+            'Advanced analytics & productivity insights',
+            'SSO & custom security policies',
+            'Dedicated account manager',
+            '99.9% uptime SLA',
+            '24/7 phone & chat support',
         ],
     },
 ];
@@ -74,8 +78,18 @@ export default function PricingSection() {
             <div className="absolute top-0 right-0 w-125 h-125 bg-primary/5 rounded-full blur-[120px] -z-10" />
             <div className="absolute bottom-0 left-0 w-125 h-125 bg-purple-500/5 rounded-full blur-[120px] -z-10" />
 
-            <div className="container mx-auto px-4">
+            <div className="container mx-auto px-4 text-center">
                 <div className="text-center max-w-3xl mx-auto mb-16">
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/5 text-primary text-sm font-bold uppercase tracking-widest mb-6 border border-primary/10 hover:bg-primary/10 transition-colors cursor-default"
+                    >
+                        <CircleDollarSign className="w-4 h-4" />
+                        Pricing Plans
+                    </motion.div>
+
                     <motion.h2
                         initial={{ opacity: 0, scale: 0.9 }}
                         whileInView={{ opacity: 1, scale: 1 }}
@@ -173,7 +187,11 @@ export default function PricingSection() {
                                 )}
                                 variant={tier.popular ? "default" : "secondary"}
                             >
-                                {tier.price.monthly === 0 ? 'Get Started Free' : 'Choose Plan'}
+                                {tier.price.monthly === 0
+                                    ? 'Start Free Forever'
+                                    : tier.name === 'Pro'
+                                        ? 'Start 14-Day Free Trial'
+                                        : 'Contact Sales'}
                             </Button>
                         </motion.div>
                     ))}

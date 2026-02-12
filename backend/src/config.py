@@ -26,9 +26,12 @@ class Settings(BaseSettings):
     # Rate limiting configuration
     enable_rate_limiting: bool = False
     rate_limit_per_minute: int = 100
-    
+
     force_https: bool = Field(default=False)
     enable_security_headers: bool = Field(default=False)
+
+    # Dapr configuration
+    enable_dapr: bool = Field(default=False)
 
     class Config:
         env_file = ".env"

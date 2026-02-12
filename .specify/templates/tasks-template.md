@@ -69,6 +69,19 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] T008 Configure error handling and logging infrastructure
 - [ ] T009 Setup environment configuration management
 
+**Phase-V Event-Driven Infrastructure (if applicable):**
+
+- [ ] T010 [P] Configure Dapr sidecar injection for all microservice deployments
+- [ ] T011 [P] Create Dapr State Store component YAML (e.g., statestore-postgresql.yaml)
+- [ ] T012 [P] Create Dapr Pub/Sub component YAML (e.g., pubsub-kafka.yaml)
+- [ ] T013 [P] Create Dapr Secrets component YAML (e.g., secretstore-kubernetes.yaml)
+- [ ] T014 [P] Create Dapr Jobs component YAML (if scheduling required)
+- [ ] T015 [P] Setup Kafka/Strimzi cluster configuration (if using Kafka)
+- [ ] T016 [P] Define standardized event schema structure (event_type, payload, user_id, timestamp, correlation_id)
+- [ ] T017 [P] Configure distributed tracing with Dapr (OpenTelemetry/Zipkin/Jaeger)
+- [ ] T018 [P] Create Kafka topic definitions following naming convention (domain.entity.action)
+- [ ] T019 Implement correlation ID propagation middleware for distributed tracing
+
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
 ---

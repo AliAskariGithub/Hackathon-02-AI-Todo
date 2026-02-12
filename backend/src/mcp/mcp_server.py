@@ -58,29 +58,32 @@ class MCPServer:
 
 FastMCP = MCPServer  # Map to the simplified implementation
 
-# Import the tool functions after class definition to avoid circular imports
+# Import the tool functions and schemas after class definition to avoid circular imports
 from src.mcp.tools.task_tools import (
     add_task_wrapper,
-    get_add_task_schema,
     list_tasks_wrapper,
-    get_list_tasks_schema,
     complete_task_wrapper,
-    get_complete_task_schema,
     update_task_wrapper,
-    get_update_task_schema,
     delete_task_wrapper,
-    get_delete_task_schema
+    search_tasks_wrapper,
+    ADD_TASK_SCHEMA,
+    LIST_TASKS_SCHEMA,
+    COMPLETE_TASK_SCHEMA,
+    UPDATE_TASK_SCHEMA,
+    DELETE_TASK_SCHEMA,
+    SEARCH_TASKS_SCHEMA
 )
 
 # Initialize the MCP server
 mcp = FastMCP("TodoServer")
 
 # Register all task management tools with their schemas
-mcp.add_tool("add_task", add_task_wrapper, get_add_task_schema())
-mcp.add_tool("list_tasks", list_tasks_wrapper, get_list_tasks_schema())
-mcp.add_tool("complete_task", complete_task_wrapper, get_complete_task_schema())
-mcp.add_tool("update_task", update_task_wrapper, get_update_task_schema())
-mcp.add_tool("delete_task", delete_task_wrapper, get_delete_task_schema())
+mcp.add_tool("add_task", add_task_wrapper, ADD_TASK_SCHEMA)
+mcp.add_tool("list_tasks", list_tasks_wrapper, LIST_TASKS_SCHEMA)
+mcp.add_tool("complete_task", complete_task_wrapper, COMPLETE_TASK_SCHEMA)
+mcp.add_tool("update_task", update_task_wrapper, UPDATE_TASK_SCHEMA)
+mcp.add_tool("delete_task", delete_task_wrapper, DELETE_TASK_SCHEMA)
+mcp.add_tool("search_tasks", search_tasks_wrapper, SEARCH_TASKS_SCHEMA)
 
 def get_mcp_server():
     """

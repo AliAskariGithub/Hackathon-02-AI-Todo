@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Zap, Shield, Smartphone, Globe, Layout, Palette } from "lucide-react";
+import { Zap, Shield, Smartphone, Globe, Layout, Palette, Sparkles } from "lucide-react";
 import { motion, Variants } from "framer-motion";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import React from "react";
@@ -9,43 +9,43 @@ import { cn } from "@/lib/utils";
 
 const features = [
     {
-        title: "Lighting Fast",
-        description: "Built with Next.js 16 for incredible speed and performance.",
+        title: "Conversational Task Creation",
+        description: "Create, update, and organize tasks through natural conversation. Say goodbye to forms and hello to simplicity. Example: 'Move my 3pm meeting to Thursday and add John to the invite.'",
         icon: Zap,
         gradient: "from-yellow-400 to-orange-500",
         color: "text-yellow-500"
     },
     {
-        title: "Secure by Design",
-        description: "Enterprise-grade security to keep your data safe and private.",
+        title: "AI-Powered Priority Engine",
+        description: "Let AI analyze your deadlines, task dependencies, and work patterns to automatically prioritize your day. Focus on what matters most without the mental overhead.",
         icon: Shield,
         gradient: "from-blue-400 to-indigo-500",
         color: "text-blue-500"
     },
     {
-        title: "Fully Responsive",
-        description: "Works perfectly on desktop, tablet, and mobile devices.",
+        title: "Understands How You Think",
+        description: "Type 'coffee with Sarah next Tuesday' and watch AI extract the task, date, time, and participants automatically. No manual fields to fill.",
         icon: Smartphone,
         gradient: "from-purple-400 to-pink-500",
         color: "text-purple-500"
     },
     {
-        title: "Global Sync",
-        description: "Access your tasks from anywhere, anytime, on any device.",
+        title: "Intelligent Reminders",
+        description: "Get reminded based on time, location, and context. 'Remind me to buy milk when I'm near the store' actually works.",
         icon: Globe,
         gradient: "from-green-400 to-emerald-500",
         color: "text-emerald-500"
     },
     {
-        title: "Intuitive Layout",
-        description: "Clean, clutter-free interface designed for focus.",
+        title: "Learns Your Habits",
+        description: "The more you use it, the smarter it gets. AI learns your work patterns, preferred times, and scheduling preferences to make better suggestions.",
         icon: Layout,
         gradient: "from-cyan-400 to-blue-500",
         color: "text-cyan-500"
     },
     {
-        title: "Premium Themes",
-        description: "Beautiful dark and light modes with custom accent colors.",
+        title: "Universal Access",
+        description: "Your AI assistant and all your tasks sync seamlessly across web, mobile, and desktop. Start on one device, finish on another.",
         icon: Palette,
         gradient: "from-red-400 to-rose-500",
         color: "text-rose-500"
@@ -84,7 +84,17 @@ export function FeaturesSection() {
             <div className="absolute inset-0 bg-secondary/30 -z-20" />
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[600px] bg-primary/5 rounded-full blur-[120px] -z-10" />
 
-            <div className="container mx-auto px-4 md:px-6">
+            <div className="container mx-auto px-4 md:px-6 text-center">
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/5 text-primary text-sm font-bold uppercase tracking-widest mb-6 border border-primary/10 hover:bg-primary/10 transition-colors cursor-default"
+                >
+                    <Sparkles className="w-4 h-4" />
+                    Featured
+                </motion.div>
+
                 <motion.div
                     className="mx-auto max-w-2xl text-center mb-16"
                     initial={{ opacity: 0, y: 20 }}
@@ -93,11 +103,11 @@ export function FeaturesSection() {
                     transition={{ duration: prefersReducedMotion ? 0 : 0.6 }}
                 >
                     <h2 className="text-3xl font-black tracking-tight sm:text-5xl mb-4">
-                        Everything needed to <br />
-                        <span className="text-transparent bg-clip-text bg-linear-to-r from-primary to-emerald-500">stay organized</span>
+                        AI-Enhanced Features <br />
+                        <span className="text-transparent bg-clip-text bg-linear-to-r from-primary to-emerald-500">Built for You</span>
                     </h2>
                     <p className="mt-4 text-xl text-muted-foreground/80 font-light">
-                        Our platform provides all the tools you need to manage your tasks efficiently and elegantly.
+                        Powerful AI capabilities that make task management effortless and intelligent.
                     </p>
                 </motion.div>
 
@@ -106,7 +116,7 @@ export function FeaturesSection() {
                     initial="hidden"
                     whileInView="show"
                     viewport={{ once: true, margin: "-100px" }}
-                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-left"
                 >
                     {features.map((feature, index) => (
                         <motion.div key={index} variants={item} whileHover={{ y: -8 }} className="h-full">
