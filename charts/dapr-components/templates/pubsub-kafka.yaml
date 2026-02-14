@@ -1,0 +1,35 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: kafka-pubsub
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: dapr-pubsub
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: kafka-pubsub
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+    # Kafka broker addresses
+    - name: brokers
+      value: {{ .Values.kafka.bootstrapServers }}
+
+    # Consumer group for this application
+    - name: consumerGroup
+      value: {{ .Values.kafka.consumerGroup }}
+
+    # Authentication type (none for local development)
+    - name: authType
+      value: {{ .Values.kafka.authType }}
+
+    # Consumer configuration
+    - name: consumeRetryInterval
+      value: {{ .Values.kafka.consumeRetryInterval }}
+
+    - name: maxMessageBytes
+      value: {{ .Values.kafka.maxMessageBytes | quote }}
+
+    # Enable idempotency
+    - name: enableIdempotency
+      value: {{ .Values.kafka.enableIdempotency | quote }}

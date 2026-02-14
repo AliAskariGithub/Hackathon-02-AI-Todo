@@ -12,6 +12,7 @@ from src.api.routers.analytics import router as analytics_router
 from src.api.routers.mcp import router as mcp_router
 from src.api.routers.chat import router as chat_router
 from src.api.routers.auth import router as auth_router
+from src.api.routers.events import router as events_router
 from src.utils.db_utils import create_tables
 from src.utils.logging_config import setup_logging
 from src.utils.exception_handlers import (
@@ -86,6 +87,7 @@ app.include_router(users_router)
 app.include_router(analytics_router)
 app.include_router(mcp_router)
 app.include_router(chat_router)
+app.include_router(events_router)  # SSE events router for real-time updates
 
 
 @app.get("/")

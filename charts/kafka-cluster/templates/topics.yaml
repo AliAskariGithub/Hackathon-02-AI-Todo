@@ -1,0 +1,91 @@
+---
+# Task Events Topic - 3 partitions for load distribution with user_id partition key
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: todo.task.events
+  namespace: {{ .Release.Namespace }}
+  labels:
+    strimzi.io/cluster: {{ .Values.kafka.clusterName }}
+    app.kubernetes.io/name: kafka-topic
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: task-events
+spec:
+  partitions: 3
+  replicas: {{ .Values.kafka.replicationFactor }}
+  config:
+    retention.ms: "604800000"  # 7 days
+    segment.bytes: "1073741824"  # 1GB
+    cleanup.policy: delete
+---
+# Reminders Topic - 1 partition for strict ordering
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: todo.reminders
+  namespace: {{ .Release.Namespace }}
+  labels:
+    strimzi.io/cluster: {{ .Values.kafka.clusterName }}
+    app.kubernetes.io/name: kafka-topic
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: reminders
+spec:
+  partitions: 1
+  replicas: {{ .Values.kafka.replicationFactor }}
+  config:
+    retention.ms: "86400000"  # 1 day
+    cleanup.policy: delete
+---
+# Notifications Topic - 1 partition for notification delivery events
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: todo.notifications
+  namespace: {{ .Release.Namespace }}
+  labels:
+    strimzi.io/cluster: {{ .Values.kafka.clusterName }}
+    app.kubernetes.io/name: kafka-topic
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: notifications
+spec:
+  partitions: 1
+  replicas: {{ .Values.kafka.replicationFactor }}
+  config:
+    retention.ms: "604800000"  # 7 days
+    cleanup.policy: delete
+---
+# Audit Events Topic - 1 partition for chronological audit trail
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: todo.audit.events
+  namespace: {{ .Release.Namespace }}
+  labels:
+    strimzi.io/cluster: {{ .Values.kafka.clusterName }}
+    app.kubernetes.io/name: kafka-topic
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: audit-events
+spec:
+  partitions: 1
+  replicas: {{ .Values.kafka.replicationFactor }}
+  config:
+    retention.ms: "2592000000"  # 30 days
+    cleanup.policy: delete
+---
+# Dead Letter Queue Topic - 1 partition for failed events
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: todo.task.events.dlq
+  namespace: {{ .Release.Namespace }}
+  labels:
+    strimzi.io/cluster: {{ .Values.kafka.clusterName }}
+    app.kubernetes.io/name: kafka-topic
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: dead-letter-queue
+spec:
+  partitions: 1
+  replicas: {{ .Values.kafka.replicationFactor }}
+  config:
+    retention.ms: "604800000"  # 7 days
+    cleanup.policy: delete

@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.recurring.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.recurring.name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: recurring-service
+spec:
+  replicas: {{ .Values.recurring.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.recurring.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.recurring.name }}
+        app.kubernetes.io/name: {{ .Values.recurring.name }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        # Dapr sidecar annotations
+        dapr.io/enabled: "true"
+        dapr.io/app-id: {{ .Values.recurring.dapr.appId }}
+        dapr.io/app-port: {{ .Values.recurring.port | quote }}
+        dapr.io/config: {{ .Values.recurring.dapr.config }}
+        dapr.io/log-level: {{ .Values.recurring.dapr.logLevel }}
+        dapr.io/enable-metrics: "true"
+        dapr.io/metrics-port: "9090"
+    spec:
+      containers:
+      - name: recurring-service
+        image: {{ .Values.recurring.image.repository }}:{{ .Values.recurring.image.tag }}
+        imagePullPolicy: {{ .Values.recurring.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.recurring.port }}
+          name: http
+          protocol: TCP
+        env:
+        - name: SERVICE_PORT
+          value: {{ .Values.recurring.port | quote }}
+        - name: DAPR_HTTP_PORT
+          value: "3500"
+        - name: PUBSUB_NAME
+          value: {{ .Values.recurring.dapr.pubsubName }}
+        - name: DAPR_STATE_STORE
+          value: {{ .Values.recurring.dapr.stateStore }}
+        resources:
+          requests:
+            memory: {{ .Values.recurring.resources.requests.memory }}
+            cpu: {{ .Values.recurring.resources.requests.cpu }}
+          limits:
+            memory: {{ .Values.recurring.resources.limits.memory }}
+            cpu: {{ .Values.recurring.resources.limits.cpu }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.recurring.port }}
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: {{ .Values.recurring.port }}
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000

@@ -243,7 +243,7 @@
 - [X] T108 [P] Create architecture diagram showing event flow from UI to microservices - **COMPLETED**: Created ARCHITECTURE_DIAGRAM.md with system overview, event flows, and component interactions
 - [X] T109 [P] Document all Kafka topics and their purposes in `docs/KAFKA_TOPICS.md` - **COMPLETED**: Already created with detailed topic documentation, schemas, and monitoring
 - [X] T110 [P] Document all Dapr components and their configurations in `docs/DAPR_COMPONENTS.md` - **COMPLETED**: Already created with component details, usage examples, and best practices
-- [ ] T111 Run quickstart.md validation (follow all steps and verify system works end-to-end)
+- [ ] T111 Run quickstart.md validation (follow all steps and verify system works end-to-end) - **BLOCKED**: Requires Dapr sidecar injection (needs 6GB RAM Minikube or production cluster)
 
 ### Security & Performance
 

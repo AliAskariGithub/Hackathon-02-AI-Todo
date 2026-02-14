@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.audit.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.audit.name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: audit-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: {{ .Values.audit.service.port }}
+    targetPort: {{ .Values.audit.port }}
+    protocol: TCP
+    name: http
+  selector:
+    app: {{ .Values.audit.name }}

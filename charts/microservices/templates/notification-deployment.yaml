@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.notification.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.notification.name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: notification-service
+spec:
+  replicas: {{ .Values.notification.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.notification.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.notification.name }}
+        app.kubernetes.io/name: {{ .Values.notification.name }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        # Dapr sidecar annotations
+        dapr.io/enabled: "true"
+        dapr.io/app-id: {{ .Values.notification.dapr.appId }}
+        dapr.io/app-port: {{ .Values.notification.port | quote }}
+        dapr.io/config: {{ .Values.notification.dapr.config }}
+        dapr.io/log-level: {{ .Values.notification.dapr.logLevel }}
+        dapr.io/enable-metrics: "true"
+        dapr.io/metrics-port: "9090"
+    spec:
+      containers:
+      - name: notification-service
+        image: {{ .Values.notification.image.repository }}:{{ .Values.notification.image.tag }}
+        imagePullPolicy: {{ .Values.notification.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.notification.port }}
+          name: http
+          protocol: TCP
+        env:
+        - name: SERVICE_PORT
+          value: {{ .Values.notification.port | quote }}
+        - name: DAPR_HTTP_PORT
+          value: "3500"
+        - name: PUBSUB_NAME
+          value: {{ .Values.notification.dapr.pubsubName }}
+        - name: DAPR_STATE_STORE
+          value: {{ .Values.notification.dapr.stateStore }}
+        resources:
+          requests:
+            memory: {{ .Values.notification.resources.requests.memory }}
+            cpu: {{ .Values.notification.resources.requests.cpu }}
+          limits:
+            memory: {{ .Values.notification.resources.limits.memory }}
+            cpu: {{ .Values.notification.resources.limits.cpu }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.notification.port }}
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: {{ .Values.notification.port }}
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000

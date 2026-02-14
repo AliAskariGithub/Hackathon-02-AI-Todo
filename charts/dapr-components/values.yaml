@@ -1,0 +1,61 @@
+# Dapr Components Configuration for AI Todo Event-Driven Architecture
+
+# Kafka Pub/Sub Configuration
+kafka:
+  # Kafka bootstrap servers (internal Kubernetes service)
+  bootstrapServers: "ai-todo-kafka-kafka-bootstrap.kafka.svc.cluster.local:9092"
+
+  # Consumer group for this application
+  consumerGroup: "ai-todo-group"
+
+  # Authentication type (none for local development)
+  authType: "none"
+
+  # Consumer retry configuration
+  consumeRetryInterval: "500ms"
+
+  # Maximum message size (1MB)
+  maxMessageBytes: "1048576"
+
+  # Enable idempotency for exactly-once delivery
+  enableIdempotency: true
+
+# PostgreSQL State Store Configuration
+stateStore:
+  # Kubernetes secret containing PostgreSQL connection string
+  secretName: "postgres-secret"
+  secretKey: "connectionString"
+
+  # Table name for Dapr state storage
+  tableName: "dapr_state"
+
+  # Database operation timeout (30 seconds)
+  timeout: 30
+
+  # Cleanup interval for expired state entries (1 hour)
+  cleanupInterval: 3600
+
+# Distributed Tracing Configuration
+tracing:
+  # Sampling rate (1.0 = 100% for development, 0.1 = 10% for production)
+  samplingRate: "1"
+
+  # OpenTelemetry configuration
+  otel:
+    # Zipkin endpoint for trace collection
+    endpointAddress: "http://zipkin.default.svc.cluster.local:9411/api/v2/spans"
+    isSecure: false
+    protocol: "http"
+
+# Metrics Configuration
+metrics:
+  # Enable Prometheus metrics
+  enabled: true
+
+# Access Control Configuration
+accessControl:
+  # Default action for service-to-service calls
+  defaultAction: "allow"
+
+  # Trust domain for mTLS
+  trustDomain: "public"

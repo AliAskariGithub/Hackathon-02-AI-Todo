@@ -1,0 +1,31 @@
+replicaCount: 1
+
+image:
+  repository: openzipkin/zipkin
+  pullPolicy: IfNotPresent
+  tag: "2.24"
+
+service:
+  type: ClusterIP
+  port: 9411
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+storage:
+  type: mem
+  # For production, use elasticsearch or cassandra
+  # type: elasticsearch
+  # elasticsearch:
+  #   hosts: elasticsearch:9200
+
+env:
+  - name: STORAGE_TYPE
+    value: "mem"
+  - name: JAVA_OPTS
+    value: "-Xms256m -Xmx512m"

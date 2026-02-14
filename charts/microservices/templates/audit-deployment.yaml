@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.audit.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.audit.name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: audit-service
+spec:
+  replicas: {{ .Values.audit.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.audit.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.audit.name }}
+        app.kubernetes.io/name: {{ .Values.audit.name }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        # Dapr sidecar annotations
+        dapr.io/enabled: "true"
+        dapr.io/app-id: {{ .Values.audit.dapr.appId }}
+        dapr.io/app-port: {{ .Values.audit.port | quote }}
+        dapr.io/config: {{ .Values.audit.dapr.config }}
+        dapr.io/log-level: {{ .Values.audit.dapr.logLevel }}
+        dapr.io/enable-metrics: "true"
+        dapr.io/metrics-port: "9090"
+    spec:
+      containers:
+      - name: audit-service
+        image: {{ .Values.audit.image.repository }}:{{ .Values.audit.image.tag }}
+        imagePullPolicy: {{ .Values.audit.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.audit.port }}
+          name: http
+          protocol: TCP
+        env:
+        - name: SERVICE_PORT
+          value: {{ .Values.audit.port | quote }}
+        - name: DAPR_HTTP_PORT
+          value: "3500"
+        - name: PUBSUB_NAME
+          value: {{ .Values.audit.dapr.pubsubName }}
+        - name: DAPR_STATE_STORE
+          value: {{ .Values.audit.dapr.stateStore }}
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: connectionString
+        resources:
+          requests:
+            memory: {{ .Values.audit.resources.requests.memory }}
+            cpu: {{ .Values.audit.resources.requests.cpu }}
+          limits:
+            memory: {{ .Values.audit.resources.limits.memory }}
+            cpu: {{ .Values.audit.resources.limits.cpu }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.audit.port }}
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: {{ .Values.audit.port }}
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000

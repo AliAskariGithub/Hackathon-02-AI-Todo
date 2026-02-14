@@ -1,0 +1,272 @@
+openapi: 3.0.3
+info:
+  title: Recurring Task Service API
+  version: 1.0.0
+  description: |
+    API specification for the Recurring Task Service microservice.
+    Handles automatic generation of recurring task instances when tasks are completed.
+  contact:
+    name: AI Todo Team
+    email: support@ai-todo.local
+
+servers:
+  - url: http://recurring-service.default.svc.cluster.local:8002
+    description: Kubernetes internal service
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns service health status
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  service:
+                    type: string
+                    example: recurring-service
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /ready:
+    get:
+      summary: Readiness check endpoint
+      description: Returns service readiness status
+      operationId: getReadiness
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+                  dapr_connected:
+                    type: boolean
+                    example: true
+
+  /dapr/subscribe:
+    get:
+      summary: Dapr subscription endpoint
+      description: Returns list of topics this service subscribes to
+      operationId: getDaprSubscriptions
+      responses:
+        '200':
+          description: List of subscriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    pubsubname:
+                      type: string
+                      example: kafka-pubsub
+                    topic:
+                      type: string
+                      example: todo.task.events
+                    route:
+                      type: string
+                      example: /events/task-completed
+
+  /events/task-completed:
+    post:
+      summary: Handle task completed events
+      description: Dapr Pub/Sub callback for task.completed events
+      operationId: handleTaskCompletedEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  description: Dapr event ID
+                source:
+                  type: string
+                  description: Event source
+                type:
+                  type: string
+                  description: Event type
+                specversion:
+                  type: string
+                  description: CloudEvents spec version
+                datacontenttype:
+                  type: string
+                  example: application/json
+                data:
+                  $ref: '#/components/schemas/TaskCompletedEvent'
+      responses:
+        '200':
+          description: Event processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success, retry, drop]
+                  message:
+                    type: string
+                    example: Recurring task generated
+        '400':
+          description: Invalid event data
+        '500':
+          description: Internal server error
+
+  /internal/generate-recurring-task:
+    post:
+      summary: Generate next recurring task instance
+      description: Internal endpoint for creating next task instance (called after idempotency check)
+      operationId: generateRecurringTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - task_id
+                - title
+                - description
+                - priority
+                - recurrence_pattern
+                - recurrence_interval
+                - user_id
+                - correlation_id
+              properties:
+                task_id:
+                  type: string
+                  format: uuid
+                  description: Original task ID (becomes parent_task_id)
+                title:
+                  type: string
+                description:
+                  type: string
+                  nullable: true
+                priority:
+                  type: string
+                  enum: [low, medium, high]
+                recurrence_pattern:
+                  type: string
+                  enum: [daily, weekly, monthly]
+                recurrence_interval:
+                  type: integer
+                  minimum: 1
+                recurrence_day_of_week:
+                  type: integer
+                  minimum: 0
+                  maximum: 6
+                  nullable: true
+                recurrence_day_of_month:
+                  type: integer
+                  minimum: 1
+                  maximum: 31
+                  nullable: true
+                tags:
+                  type: array
+                  items:
+                    type: string
+                user_id:
+                  type: string
+                  format: uuid
+                correlation_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Recurring task created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  new_task_id:
+                    type: string
+                    format: uuid
+                  next_due_date:
+                    type: string
+                    format: date-time
+        '400':
+          description: Invalid request data
+        '500':
+          description: Failed to create recurring task
+
+components:
+  schemas:
+    TaskCompletedEvent:
+      type: object
+      required:
+        - event_type
+        - payload
+        - user_id
+        - timestamp
+        - correlation_id
+      properties:
+        event_type:
+          type: string
+          enum: [task.completed]
+        payload:
+          type: object
+          required:
+            - task_id
+            - title
+            - is_recurring
+            - completed_at
+          properties:
+            task_id:
+              type: string
+              format: uuid
+            title:
+              type: string
+            is_recurring:
+              type: boolean
+            recurrence_pattern:
+              type: string
+              enum: [daily, weekly, monthly]
+              nullable: true
+            recurrence_interval:
+              type: integer
+              minimum: 1
+              nullable: true
+            recurrence_day_of_week:
+              type: integer
+              minimum: 0
+              maximum: 6
+              nullable: true
+            recurrence_day_of_month:
+              type: integer
+              minimum: 1
+              maximum: 31
+              nullable: true
+            completed_at:
+              type: string
+              format: date-time
+        user_id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        correlation_id:
+          type: string
+          format: uuid

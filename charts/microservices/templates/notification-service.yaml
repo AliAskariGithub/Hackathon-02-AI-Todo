@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.notification.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.notification.name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: notification-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: {{ .Values.notification.service.port }}
+    targetPort: {{ .Values.notification.port }}
+    protocol: TCP
+    name: http
+  selector:
+    app: {{ .Values.notification.name }}

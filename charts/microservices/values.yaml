@@ -1,0 +1,106 @@
+# Microservices Configuration for AI Todo Event-Driven Architecture
+
+# Notification Service Configuration
+notification:
+  name: notification-service
+  replicas: 1
+
+  # Container image configuration
+  image:
+    repository: ai-todo/notification-service
+    tag: v1.0.3
+    pullPolicy: IfNotPresent
+
+  # Service port
+  port: 8004
+
+  # Kubernetes Service configuration
+  service:
+    port: 8004
+
+  # Dapr configuration
+  dapr:
+    appId: notification-service
+    config: tracing-config
+    logLevel: info
+    pubsubName: kafka-pubsub
+    stateStore: statestore
+
+  # Resource limits
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 256Mi
+      cpu: 200m
+
+# Recurring Task Service Configuration
+recurring:
+  name: recurring-service
+  replicas: 1
+
+  # Container image configuration
+  image:
+    repository: ai-todo/recurring-service
+    tag: v1.0.3
+    pullPolicy: IfNotPresent
+
+  # Service port
+  port: 8002
+
+  # Kubernetes Service configuration
+  service:
+    port: 8002
+
+  # Dapr configuration
+  dapr:
+    appId: recurring-service
+    config: tracing-config
+    logLevel: info
+    pubsubName: kafka-pubsub
+    stateStore: statestore
+
+  # Resource limits
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 256Mi
+      cpu: 200m
+
+# Audit Service Configuration
+audit:
+  name: audit-service
+  replicas: 1
+
+  # Container image configuration
+  image:
+    repository: ai-todo/audit-service
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+
+  # Service port
+  port: 8003
+
+  # Kubernetes Service configuration
+  service:
+    port: 8003
+
+  # Dapr configuration
+  dapr:
+    appId: audit-service
+    config: tracing-config
+    logLevel: info
+    pubsubName: kafka-pubsub
+    stateStore: statestore
+
+  # Resource limits
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 256Mi
+      cpu: 200m
