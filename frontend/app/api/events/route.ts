@@ -13,7 +13,9 @@ import { NextRequest } from 'next/server';
  * - Automatic reconnection support
  */
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+// Use server-side env var for internal Docker communication
+// Falls back to NEXT_PUBLIC for local development
+const BACKEND_URL = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 const HEARTBEAT_INTERVAL = 30000; // 30 seconds
 
 interface TaskEvent {

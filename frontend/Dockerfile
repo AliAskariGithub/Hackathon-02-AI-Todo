@@ -19,6 +19,20 @@ RUN npm ci --legacy-peer-deps
 # Copy application source
 COPY . .
 
+# Build arguments for Next.js environment variables
+ARG NEXT_PUBLIC_API_BASE_URL=http://backend:8000
+ARG NEXT_PUBLIC_BACKEND_URL=http://backend:8000
+ARG NEXT_PUBLIC_SITE_URL=http://localhost:3000
+ARG NEXT_PUBLIC_BETTER_AUTH_URL=http://localhost:3000
+ARG BETTER_AUTH_SECRET=egz3jkCGjvTJ27lpHpCW99i7vg7LtfSW
+
+# Set environment variables for build
+ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
+ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
+ENV NEXT_PUBLIC_BETTER_AUTH_URL=$NEXT_PUBLIC_BETTER_AUTH_URL
+ENV BETTER_AUTH_SECRET=$BETTER_AUTH_SECRET
+
 # Build Next.js application
 RUN npm run build
 
