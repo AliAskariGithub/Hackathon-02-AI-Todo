@@ -55,7 +55,6 @@ export async function GET(request: NextRequest) {
     async start(controller) {
       const encoder = new TextEncoder();
       let heartbeatTimer: NodeJS.Timeout;
-      let eventSource: EventSource | null = null;
 
       // Send initial connection message
       const sendMessage = (data: string) => {
@@ -133,9 +132,6 @@ export async function GET(request: NextRequest) {
       } finally {
         // Cleanup
         clearInterval(heartbeatTimer);
-        if (eventSource) {
-          eventSource.close();
-        }
         controller.close();
       }
     },
