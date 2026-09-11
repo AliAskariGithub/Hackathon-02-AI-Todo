@@ -1,0 +1,63 @@
+# Kafka Cluster Configuration for AI Todo Event-Driven Architecture
+# Optimized for local Minikube deployment with 4GB RAM / 2-CPU constraints
+
+kafka:
+  # Cluster identification
+  clusterName: ai-todo-kafka
+
+  # Kafka version
+  version: "4.1.1"
+
+  # Single replica for local development (KRaft mode)
+  replicas: 1
+
+  # Replication settings for single-node cluster
+  replicationFactor: 1
+  minInsyncReplicas: 1
+
+  # Default retention (7 days)
+  defaultRetentionHours: 168
+
+  # Storage configuration
+  storage:
+    type: ephemeral  # Use ephemeral for local development
+    # For production, use persistent-claim:
+    # type: persistent-claim
+    # size: 10Gi
+    # class: standard
+
+  # Resource limits optimized for 4GB RAM / 2-CPU Minikube
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 250m
+    limits:
+      memory: 1Gi
+      cpu: 500m
+
+  # JVM heap settings for resource-constrained environment
+  jvm:
+    heapMin: 256m
+    heapMax: 512m
+
+# Topic-specific overrides (optional)
+topics:
+  taskEvents:
+    partitions: 3
+    retentionMs: 604800000  # 7 days
+
+  reminders:
+    partitions: 1
+    retentionMs: 86400000  # 1 day
+
+  notifications:
+    partitions: 1
+    retentionMs: 604800000  # 7 days
+
+  auditEvents:
+    partitions: 1
+    retentionMs: 2592000000  # 30 days
+
+  deadLetterQueue:
+    partitions: 1
+    retentionMs: 604800000  # 7 days

@@ -1,0 +1,359 @@
+openapi: 3.0.3
+info:
+  title: Audit Service API
+  version: 1.0.0
+  description: |
+    API specification for the Audit Service microservice.
+    Captures all system events into a chronological activity log for observability and compliance.
+  contact:
+    name: AI Todo Team
+    email: support@ai-todo.local
+
+servers:
+  - url: http://audit-service.default.svc.cluster.local:8003
+    description: Kubernetes internal service
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns service health status
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  service:
+                    type: string
+                    example: audit-service
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /ready:
+    get:
+      summary: Readiness check endpoint
+      description: Returns service readiness status
+      operationId: getReadiness
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+                  dapr_connected:
+                    type: boolean
+                    example: true
+                  database_connected:
+                    type: boolean
+                    example: true
+
+  /dapr/subscribe:
+    get:
+      summary: Dapr subscription endpoint
+      description: Returns list of topics this service subscribes to
+      operationId: getDaprSubscriptions
+      responses:
+        '200':
+          description: List of subscriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    pubsubname:
+                      type: string
+                      example: kafka-pubsub
+                    topic:
+                      type: string
+                      example: todo.task.events
+                    route:
+                      type: string
+                      example: /events/audit
+
+  /events/audit:
+    post:
+      summary: Handle all system events for auditing
+      description: Dapr Pub/Sub callback for all event types (task, reminder, notification)
+      operationId: handleAuditEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  description: Dapr event ID
+                source:
+                  type: string
+                  description: Event source
+                type:
+                  type: string
+                  description: Event type
+                specversion:
+                  type: string
+                  description: CloudEvents spec version
+                datacontenttype:
+                  type: string
+                  example: application/json
+                data:
+                  $ref: '#/components/schemas/AnyEvent'
+      responses:
+        '200':
+          description: Event logged successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success, retry, drop]
+                  audit_id:
+                    type: string
+                    format: uuid
+        '400':
+          description: Invalid event data
+        '500':
+          description: Internal server error
+
+  /audit/logs:
+    get:
+      summary: Query audit logs
+      description: Retrieve audit logs with optional filtering
+      operationId: getAuditLogs
+      parameters:
+        - name: user_id
+          in: query
+          description: Filter by user ID
+          schema:
+            type: string
+            format: uuid
+        - name: event_type
+          in: query
+          description: Filter by event type
+          schema:
+            type: string
+            example: task.created
+        - name: correlation_id
+          in: query
+          description: Filter by correlation ID
+          schema:
+            type: string
+            format: uuid
+        - name: start_date
+          in: query
+          description: Filter events after this date
+          schema:
+            type: string
+            format: date-time
+        - name: end_date
+          in: query
+          description: Filter events before this date
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          description: Maximum number of results
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+        - name: offset
+          in: query
+          description: Pagination offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Audit logs retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    description: Total number of matching logs
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+                  logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLogEntry'
+        '400':
+          description: Invalid query parameters
+        '500':
+          description: Internal server error
+
+  /audit/logs/{audit_id}:
+    get:
+      summary: Get specific audit log entry
+      description: Retrieve a single audit log entry by ID
+      operationId: getAuditLogById
+      parameters:
+        - name: audit_id
+          in: path
+          required: true
+          description: Audit log entry ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Audit log entry found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogEntry'
+        '404':
+          description: Audit log entry not found
+        '500':
+          description: Internal server error
+
+  /audit/stats:
+    get:
+      summary: Get audit statistics
+      description: Retrieve statistics about audit logs (event counts, user activity, etc.)
+      operationId: getAuditStats
+      parameters:
+        - name: start_date
+          in: query
+          description: Statistics start date
+          schema:
+            type: string
+            format: date-time
+        - name: end_date
+          in: query
+          description: Statistics end date
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_events:
+                    type: integer
+                  events_by_type:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                  active_users:
+                    type: integer
+                  date_range:
+                    type: object
+                    properties:
+                      start:
+                        type: string
+                        format: date-time
+                      end:
+                        type: string
+                        format: date-time
+        '400':
+          description: Invalid query parameters
+        '500':
+          description: Internal server error
+
+components:
+  schemas:
+    AnyEvent:
+      type: object
+      required:
+        - event_type
+        - payload
+        - user_id
+        - timestamp
+        - correlation_id
+      properties:
+        event_type:
+          type: string
+          description: Type of event (task.created, task.updated, etc.)
+        payload:
+          type: object
+          description: Event-specific data
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+        correlation_id:
+          type: string
+          format: uuid
+
+    AuditLogEntry:
+      type: object
+      required:
+        - audit_id
+        - event_type
+        - event_payload
+        - correlation_id
+        - service_name
+        - timestamp
+      properties:
+        audit_id:
+          type: string
+          format: uuid
+          description: Unique audit log entry ID
+        event_type:
+          type: string
+          description: Original event type
+        event_payload:
+          type: object
+          description: Original event payload
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: User who triggered the event
+        correlation_id:
+          type: string
+          format: uuid
+          description: Correlation ID for tracing
+        service_name:
+          type: string
+          description: Service that generated the event
+          example: backend-api
+        timestamp:
+          type: string
+          format: date-time
+          description: When the event was logged
+        metadata:
+          type: object
+          description: Additional metadata
+          properties:
+            source_ip:
+              type: string
+              nullable: true
+            user_agent:
+              type: string
+              nullable: true
+            trace_id:
+              type: string
+              nullable: true

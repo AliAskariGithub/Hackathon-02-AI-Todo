@@ -19,6 +19,7 @@ RUN npm ci --legacy-peer-deps
 # Copy application source
 COPY . .
 
+
 # Build Next.js application
 RUN npm run build
 

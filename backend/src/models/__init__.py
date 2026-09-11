@@ -224,6 +224,7 @@ class UserPublic(SQLModel):
     email: str
     created_at: datetime
     updated_at: datetime
+    access_token: Optional[str] = None
 
 
 # Chat models

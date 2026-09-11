@@ -68,10 +68,11 @@ export default function SignupForm() {
         // Store access token for cross-domain authentication (production)
         if (response.access_token) {
           localStorage.setItem('access_token', response.access_token);
+          localStorage.setItem('token', response.access_token);
         }
 
         // Update auth context with user data
-        login(response.user);
+        login(response.user, response.access_token);
 
         // Show success toast
         toast({

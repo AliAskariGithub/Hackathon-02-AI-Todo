@@ -1,0 +1,225 @@
+openapi: 3.0.3
+info:
+  title: Notification Service API
+  version: 1.0.0
+  description: |
+    API specification for the Notification Service microservice.
+    Handles reminder notifications triggered by Dapr Jobs API.
+  contact:
+    name: AI Todo Team
+    email: support@ai-todo.local
+
+servers:
+  - url: http://notification-service.default.svc.cluster.local:8001
+    description: Kubernetes internal service
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns service health status
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  service:
+                    type: string
+                    example: notification-service
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /ready:
+    get:
+      summary: Readiness check endpoint
+      description: Returns service readiness status
+      operationId: getReadiness
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+                  dapr_connected:
+                    type: boolean
+                    example: true
+
+  /dapr/subscribe:
+    get:
+      summary: Dapr subscription endpoint
+      description: Returns list of topics this service subscribes to
+      operationId: getDaprSubscriptions
+      responses:
+        '200':
+          description: List of subscriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    pubsubname:
+                      type: string
+                      example: kafka-pubsub
+                    topic:
+                      type: string
+                      example: todo.reminders
+                    route:
+                      type: string
+                      example: /events/reminder
+
+  /events/reminder:
+    post:
+      summary: Handle reminder events
+      description: Dapr Pub/Sub callback for reminder.scheduled events
+      operationId: handleReminderEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  description: Dapr event ID
+                source:
+                  type: string
+                  description: Event source
+                type:
+                  type: string
+                  description: Event type
+                specversion:
+                  type: string
+                  description: CloudEvents spec version
+                datacontenttype:
+                  type: string
+                  example: application/json
+                data:
+                  $ref: '#/components/schemas/ReminderEvent'
+      responses:
+        '200':
+          description: Event processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success, retry, drop]
+        '400':
+          description: Invalid event data
+        '500':
+          description: Internal server error
+
+  /jobs/reminder-callback:
+    post:
+      summary: Dapr Jobs API callback
+      description: Called by Dapr Jobs API when reminder time arrives
+      operationId: handleReminderCallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                job_name:
+                  type: string
+                  description: Dapr Job identifier
+                data:
+                  type: object
+                  properties:
+                    reminder_id:
+                      type: string
+                      format: uuid
+                    task_id:
+                      type: string
+                      format: uuid
+                    task_title:
+                      type: string
+                    user_id:
+                      type: string
+                      format: uuid
+                    message:
+                      type: string
+      responses:
+        '200':
+          description: Notification logged successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  notification_id:
+                    type: string
+                    format: uuid
+        '500':
+          description: Failed to process notification
+
+components:
+  schemas:
+    ReminderEvent:
+      type: object
+      required:
+        - event_type
+        - payload
+        - user_id
+        - timestamp
+        - correlation_id
+      properties:
+        event_type:
+          type: string
+          enum: [reminder.scheduled]
+        payload:
+          type: object
+          required:
+            - reminder_id
+            - task_id
+            - task_title
+            - scheduled_time
+            - message
+            - job_name
+          properties:
+            reminder_id:
+              type: string
+              format: uuid
+            task_id:
+              type: string
+              format: uuid
+            task_title:
+              type: string
+            scheduled_time:
+              type: string
+              format: date-time
+            message:
+              type: string
+            job_name:
+              type: string
+        user_id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        correlation_id:
+          type: string
+          format: uuid

@@ -1,0 +1,26 @@
+apiVersion: dapr.io/v1alpha1
+kind: Configuration
+metadata:
+  name: tracing-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: dapr-configuration
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: tracing-config
+spec:
+  # Distributed tracing configuration
+  tracing:
+    samplingRate: {{ .Values.tracing.samplingRate | quote }}
+    otel:
+      endpointAddress: {{ .Values.tracing.otel.endpointAddress }}
+      isSecure: {{ .Values.tracing.otel.isSecure }}
+      protocol: {{ .Values.tracing.otel.protocol }}
+
+  # Metrics configuration
+  metric:
+    enabled: {{ .Values.metrics.enabled }}
+
+  # Access control configuration
+  accessControl:
+    defaultAction: {{ .Values.accessControl.defaultAction }}
+    trustDomain: {{ .Values.accessControl.trustDomain }}

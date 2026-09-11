@@ -297,9 +297,9 @@ async def chat_endpoint(
                 )
 
             # Handle other error cases
-            ai_response = "Sorry, I encountered an error processing your request. Please try again."
+            ai_response = agent_response.get("response") or "Sorry, I encountered an error processing your request. Please try again."
             tool_calls_data = None
-            logger.error(f"Agent error for user {user_id}: {agent_response['response']}")
+            logger.error(f"Agent error for user {user_id}: {agent_response.get('response')}")
 
         # Add AI response to the conversation with tool_calls data
         ai_message_data = MessageCreate(

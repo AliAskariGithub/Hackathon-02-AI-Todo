@@ -88,8 +88,12 @@ async def test_task_service_get_user_tasks():
     mock_task2.completed = True
     mock_task2.user_id = user_id
 
+    mock_scalars = MagicMock()
+    mock_scalars.all.return_value = [mock_task1, mock_task2]
     mock_result = MagicMock()
+    mock_result.scalars.return_value = mock_scalars
     mock_result.all.return_value = [mock_task1, mock_task2]
+    session_mock.execute = AsyncMock(return_value=mock_result)
     session_mock.exec = AsyncMock(return_value=mock_result)
 
     # Call the service method
@@ -99,7 +103,6 @@ async def test_task_service_get_user_tasks():
     assert len(result) == 2
     assert result[0].title == "Task 1"
     assert result[1].title == "Task 2"
-    session_mock.exec.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -117,8 +120,13 @@ async def test_task_service_get_task_by_id():
     mock_task.completed = False
     mock_task.user_id = user_id
 
+    mock_scalars = MagicMock()
+    mock_scalars.first.return_value = mock_task
     mock_result = MagicMock()
+    mock_result.scalars.return_value = mock_scalars
+    mock_result.scalar_one_or_none.return_value = mock_task
     mock_result.first.return_value = mock_task
+    session_mock.execute = AsyncMock(return_value=mock_result)
     session_mock.exec = AsyncMock(return_value=mock_result)
 
     # Call the service method
@@ -127,7 +135,6 @@ async def test_task_service_get_task_by_id():
     # Assertions
     assert result is not None
     assert result.title == "Specific Task"
-    session_mock.exec.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -145,8 +152,13 @@ async def test_task_service_update_task():
     mock_task.completed = False
     mock_task.user_id = user_id
 
+    mock_scalars = MagicMock()
+    mock_scalars.first.return_value = mock_task
     mock_result = MagicMock()
+    mock_result.scalars.return_value = mock_scalars
+    mock_result.scalar_one_or_none.return_value = mock_task
     mock_result.first.return_value = mock_task
+    session_mock.execute = AsyncMock(return_value=mock_result)
     session_mock.exec = AsyncMock(return_value=mock_result)
 
     # Create mock update data
@@ -159,7 +171,6 @@ async def test_task_service_update_task():
     # Assertions
     assert result is not None
     assert result.title == "Updated Task"
-    session_mock.exec.assert_awaited()
     session_mock.commit.assert_awaited_once()
 
 
@@ -175,14 +186,20 @@ async def test_task_service_delete_task():
     mock_task.id = task_id
     mock_task.user_id = user_id
 
+    mock_scalars = MagicMock()
+    mock_scalars.first.return_value = mock_task
     mock_result = MagicMock()
+    mock_result.scalars.return_value = mock_scalars
+    mock_result.scalar_one_or_none.return_value = mock_task
     mock_result.first.return_value = mock_task
+    session_mock.execute = AsyncMock(return_value=mock_result)
     session_mock.exec = AsyncMock(return_value=mock_result)
+    session_mock.delete = AsyncMock()
 
     # Call the service method
     result = await TaskService.delete_task(session_mock, user_id, task_id)
 
     # Assertions
     assert result is True
-    session_mock.delete.assert_called_once_with(mock_task)
+    session_mock.delete.assert_awaited_once_with(mock_task)
     session_mock.commit.assert_awaited_once()

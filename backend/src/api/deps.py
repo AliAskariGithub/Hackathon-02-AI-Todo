@@ -86,6 +86,68 @@ async def get_current_user(
         )
 
 
+async def get_current_user_from_query(
+    request: Request,
+    token: Optional[str] = None,
+    access_token: Optional[str] = Cookie(None)
+) -> Dict[str, Any]:
+    """
+    Dependency to get the current user from JWT token in query parameter or cookie.
+    Used for SSE endpoints where EventSource API doesn't support custom headers.
+
+    Args:
+        request: The incoming request object
+        token: JWT token from query parameter
+        access_token: JWT token from cookie
+
+    Returns:
+        Decoded JWT payload containing user information
+
+    Raises:
+        HTTPException: If the token is invalid, expired, or missing
+    """
+    effective_token = token or access_token
+    if not effective_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated. Token required in query parameter or cookie."
+        )
+
+    try:
+        payload = decode_jwt_token(effective_token)
+
+        # Store user info in request state for later use
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token: missing user ID"
+            )
+
+        request.state.user_id = user_id
+        request.state.user_email = payload.get("email", "")
+        request.state.auth_method = "query"
+
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired. Please log in again."
+        )
+    except ValueError as e:
+        # Token type validation error
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid token: {str(e)}"
+        )
+    except jwt.PyJWTError as e:
+        logger.error(f"JWT validation error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token. Please log in again."
+        )
+
+
 async def verify_user_owns_resource(
     request: Request,
     user_id_from_path: str

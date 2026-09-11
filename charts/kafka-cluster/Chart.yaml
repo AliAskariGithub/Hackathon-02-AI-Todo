@@ -1,0 +1,15 @@
+apiVersion: v2
+name: kafka-cluster
+description: Strimzi Kafka cluster for AI Todo event-driven architecture
+type: application
+version: 1.0.0
+appVersion: "3.6.0"
+keywords:
+  - kafka
+  - strimzi
+  - event-driven
+  - messaging
+maintainers:
+  - name: AI Todo Team
+    email: support@ai-todo.local
+dependencies: []

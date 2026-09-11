@@ -109,7 +109,7 @@ fi
 echo ""
 echo "🌐 Checking network connectivity..."
 
-if docker-compose exec -T frontend wget -q --spider http://backend:8000/health 2>/dev/null; then
+if docker-compose exec -T frontend wget -q --spider http://localhost:8000/health 2>/dev/null; then
     echo -e "${GREEN}✅ Frontend can communicate with backend${NC}"
 else
     echo -e "${RED}❌ Frontend cannot communicate with backend${NC}"

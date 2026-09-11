@@ -227,7 +227,18 @@ async def get_current_user_info(
             )
 
         logger.info(f"Current user {user.id} retrieved successfully")
-        return user
+        access_token = create_access_token(
+            data={"sub": str(user.id), "email": user.email, "name": user.user_name},
+            expires_delta=timedelta(minutes=60)
+        )
+        return UserPublic(
+            id=user.id,
+            user_name=user.user_name,
+            email=user.email,
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+            access_token=access_token
+        )
 
     except ValueError:
         raise HTTPException(

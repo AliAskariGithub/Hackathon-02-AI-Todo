@@ -1,3 +1,13 @@
+---
+title: AI Todo Backend API
+emoji: ⚡
+colorFrom: green
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # AI Todo - Backend
 
 FastAPI backend for the AI Todo application with authentication, task management, and AI-powered chat.
@@ -258,6 +268,56 @@ alembic upgrade head
 # Rollback migration
 alembic downgrade -1
 ```
+
+## 🤗 Hugging Face Spaces Deployment
+
+The backend is configured for 1-click or Git deployment to **Hugging Face Spaces** using Docker:
+
+### Step 1: Create a New Space
+1. Go to [huggingface.co/new-space](https://huggingface.co/new-space).
+2. Set Space Name: e.g. `backend-todo-app`.
+3. License: `MIT` (or your choice).
+4. Select **Docker** SDK (Blank).
+5. Choose Space Hardware (free CPU basic is sufficient).
+6. Click **Create Space**.
+
+### Step 2: Configure Environment Secrets
+In your Hugging Face Space, navigate to **Settings** > **Variables and secrets**, and add the following **Secrets**:
+
+| Secret Name | Value Example | Description |
+|---|---|---|
+| `DATABASE_URL` | `postgresql://neondb_owner:password@...neon.tech/neondb?sslmode=require` | Your Neon PostgreSQL connection string |
+| `JWT_SECRET` | `your-secure-64-character-secret` | Secret key for JWT token signing |
+| `GROQ_API_KEY` | `gsk_...` | Your Groq API key |
+| `GROQ_MODEL` | `qwen/qwen3.8-27b` | Model name |
+| `ALLOWED_ORIGINS` | `https://ai-y-todo.vercel.app,http://localhost:3000` | Allowed frontend origins (comma-separated) |
+| `PORT` | `7860` | Default Hugging Face Spaces port |
+
+### Step 3: Push Backend Code to Hugging Face
+Clone your Space repository and copy the contents of the `backend/` directory into it:
+
+```bash
+# Clone your HF space
+git clone https://huggingface.co/spaces/<your-username>/backend-todo-app hf-backend
+cd hf-backend
+
+# Copy all files from hackathon-ai-todo/backend into hf-backend
+cp -r /path/to/hackathon-ai-todo/backend/* .
+
+# Push to Hugging Face
+git add .
+git commit -m "Deploy FastAPI backend to Hugging Face Spaces"
+git push origin main
+```
+
+Your backend API will be live at:
+`https://<your-username>-backend-todo-app.hf.space`
+
+You can verify the deployment by visiting:
+- Health check: `https://<your-username>-backend-todo-app.hf.space/health`
+- Interactive API docs: `https://<your-username>-backend-todo-app.hf.space/docs`
+
+---
 
 ## 🐳 Docker Deployment
 

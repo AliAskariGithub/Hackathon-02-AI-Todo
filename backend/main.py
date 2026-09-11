@@ -12,6 +12,7 @@ from src.api.routers.analytics import router as analytics_router
 from src.api.routers.mcp import router as mcp_router
 from src.api.routers.chat import router as chat_router
 from src.api.routers.auth import router as auth_router
+from src.api.routers.events import router as events_router
 from src.utils.db_utils import create_tables
 from src.utils.logging_config import setup_logging
 from src.utils.exception_handlers import (
@@ -28,8 +29,13 @@ load_dotenv(dotenv_path=env_path, override=True)
 
 # Get configuration from environment variables
 DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'
-ALLOWED_ORIGINS = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
-PORT = int(os.getenv('PORT', '8000'))
+raw_origins = os.getenv(
+    'ALLOWED_ORIGINS',
+    'http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,https://ai-y-todo.vercel.app'
+)
+ALLOWED_ORIGINS = [origin.strip() for origin in raw_origins.split(',') if origin.strip()]
+# Hugging Face Spaces sets SPACE_ID; default to 7860 on HF, 8000 locally
+PORT = int(os.getenv('PORT', '7860' if os.getenv('SPACE_ID') else '8000'))
 HOST = os.getenv('HOST', '0.0.0.0')
 
 # Debug logging (only in development)
@@ -64,7 +70,8 @@ app = FastAPI(
 # Add CORS middleware for frontend/backend communication
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,  # Use environment variable
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.vercel\.app|https://.*\.hf\.space",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -86,6 +93,7 @@ app.include_router(users_router)
 app.include_router(analytics_router)
 app.include_router(mcp_router)
 app.include_router(chat_router)
+app.include_router(events_router)  # SSE events router for real-time updates
 
 
 @app.get("/")

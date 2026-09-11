@@ -13,9 +13,10 @@ interface User {
 interface AuthContextType {
   session: {
     user: { id: string; email: string; name?: string };
+    token?: string;
   } | null;
   isLoading: boolean;
-  login: (userData: User) => void;
+  login: (userData: User, token?: string) => void;
   logout: () => Promise<void>;
 }
 
@@ -24,6 +25,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<{
     user: { id: string; email: string; name?: string };
+    token?: string;
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -32,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const initializeSession = async () => {
       try {
         // Check for token in localStorage (for cross-domain auth)
-        const token = localStorage.getItem('access_token');
+        const token = localStorage.getItem('access_token') || localStorage.getItem('token');
 
         // Prepare headers with token if available
         const headers: HeadersInit = {
@@ -51,21 +53,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (response.ok) {
           const userData = await response.json();
+          const effectiveToken = userData.access_token || token || undefined;
+          if (effectiveToken) {
+            localStorage.setItem('access_token', effectiveToken);
+            localStorage.setItem('token', effectiveToken);
+          }
           setSession({
             user: {
               id: userData.id,
               email: userData.email,
               name: userData.user_name || userData.name
-            }
+            },
+            token: effectiveToken
           });
         } else {
           // No valid session - clear any stale token
           localStorage.removeItem('access_token');
+          localStorage.removeItem('token');
           setSession(null);
         }
       } catch (error) {
         console.error('Error initializing session:', error);
         localStorage.removeItem('access_token');
+        localStorage.removeItem('token');
         setSession(null);
       } finally {
         setIsLoading(false);
@@ -75,7 +85,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initializeSession();
   }, []);
 
-  const login = (userData: User) => {
+  const login = (userData: User, token?: string) => {
+    if (token) {
+      localStorage.setItem('access_token', token);
+      localStorage.setItem('token', token);
+    }
     // Update session state with user data from login response
     // Cookies are already set by the backend
     setSession({
@@ -83,7 +97,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: userData.id,
         email: userData.email,
         name: userData.user_name || userData.name
-      }
+      },
+      token: token || undefined
     });
   };
 
@@ -96,6 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       // Clear token from localStorage
       localStorage.removeItem('access_token');
+      localStorage.removeItem('token');
       // Clear session state regardless of API call result
       setSession(null);
     }

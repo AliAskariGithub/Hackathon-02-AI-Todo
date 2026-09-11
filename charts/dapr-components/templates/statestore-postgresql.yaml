@@ -1,0 +1,30 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: statestore
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: dapr-statestore
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: postgresql-statestore
+spec:
+  type: state.postgresql
+  version: v1
+  metadata:
+    # PostgreSQL connection string from Kubernetes secret
+    - name: connectionString
+      secretKeyRef:
+        name: {{ .Values.stateStore.secretName }}
+        key: {{ .Values.stateStore.secretKey }}
+
+    # Table name for state storage
+    - name: tableName
+      value: {{ .Values.stateStore.tableName }}
+
+    # Timeout for database operations
+    - name: timeout
+      value: {{ .Values.stateStore.timeout | quote }}
+
+    # Enable TTL (Time To Live) for state entries
+    - name: cleanupIntervalInSeconds
+      value: {{ .Values.stateStore.cleanupInterval | quote }}

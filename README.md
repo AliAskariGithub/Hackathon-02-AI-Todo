@@ -7,10 +7,14 @@ A full-stack AI-powered todo application built with modern web technologies. The
 ### Core Features
 - **Secure Authentication**: Cookie-based authentication with HTTP-only cookies for XSS protection
 - **Task Management**: Full CRUD operations on tasks with optimistic updates
+- **Real-Time Synchronization**: Tasks sync across all browser tabs within 2 seconds
+- **Recurring Tasks**: Automatic generation of next task instance when completed
+- **Reminders**: Scheduled notifications with 1-second accuracy using Dapr Jobs API
 - **Testimonials System**: User-submitted testimonials with ratings and feedback
 - **Responsive UI**: Mobile-friendly design with loading states and error handling
 - **Automatic Token Refresh**: Seamless 14-minute token refresh for uninterrupted sessions
 - **Database Integration**: PostgreSQL with Neon hosting for serverless scalability
+- **Audit Trail**: Comprehensive event logging for debugging and compliance
 
 ### Interactive Chat Experience 🆕
 - **AI Task Assistant**: Natural language chat interface for task management
@@ -64,6 +68,17 @@ A full-stack AI-powered todo application built with modern web technologies. The
 - **Automation**: Bash scripts for build/deploy/health-check workflows
 - **Security**: Non-root containers, resource limits, health probes
 
+### Event-Driven Architecture 🆕
+- **Message Broker**: Apache Kafka with Strimzi Operator (KRaft mode)
+- **Service Mesh**: Dapr 1.14+ for pub/sub, state management, and service invocation
+- **Real-Time Updates**: Server-Sent Events (SSE) for browser synchronization
+- **Microservices**:
+  - Notification Service (reminder notifications)
+  - Recurring Service (automatic task generation)
+  - Audit Service (comprehensive event logging)
+- **Event Topics**: 5 Kafka topics for task events, reminders, notifications, audit, and DLQ
+- **Resilience**: Exponential backoff retry, dead letter queue, idempotency tracking
+
 ## 📋 Prerequisites
 
 ### For Local Development
@@ -80,6 +95,54 @@ A full-stack AI-powered todo application built with modern web technologies. The
 - 20GB+ disk space for images and cluster
 
 ## 🚀 Quick Start
+
+### Option 1: Event-Driven Architecture (Full Stack with Microservices)
+
+**Prerequisites**: Docker, Minikube, kubectl, Helm, Dapr CLI
+
+```bash
+# 1. Start Minikube
+minikube start --memory=4096 --cpus=2 --driver=docker
+
+# 2. Install Strimzi Kafka Operator
+helm repo add strimzi https://strimzi.io/charts/
+helm repo update
+kubectl create namespace kafka
+helm install strimzi-kafka-operator strimzi/strimzi-kafka-operator \
+  --namespace kafka --set watchNamespaces="{default,kafka}" --wait
+
+# 3. Deploy Kafka Cluster
+cd charts/kafka-cluster
+helm install kafka-cluster . --namespace default --wait
+
+# 4. Initialize Dapr
+dapr init --kubernetes --wait
+
+# 5. Deploy Dapr Components
+cd ../dapr-components
+helm install dapr-components . --namespace default --wait
+
+# 6. Build Docker Images
+eval $(minikube docker-env)
+cd ../../backend && docker build -t ai-todo/backend-api:v1.0.0 .
+cd ../frontend && docker build -t ai-todo/frontend:v1.0.0 .
+cd ../services/notification && docker build -t ai-todo/notification-service:v1.0.0 .
+cd ../recurring && docker build -t ai-todo/recurring-service:v1.0.0 .
+cd ../audit && docker build -t ai-todo/audit-service:v1.0.0 .
+
+# 7. Deploy Microservices
+cd ../../charts/microservices
+helm install microservices . --namespace default --wait
+
+# 8. Access Application
+kubectl port-forward svc/frontend 3000:3000 &
+kubectl port-forward svc/backend-api 8000:8000 &
+open http://localhost:3000
+```
+
+**See [DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md) for detailed instructions and troubleshooting.**
+
+### Option 2: Local Development (Simplified)
 
 ### Automated Setup (Recommended)
 

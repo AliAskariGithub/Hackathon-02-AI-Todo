@@ -17,6 +17,7 @@ import { DeadlinesWidget } from '@/components/dashboard/deadlines-widget';
 import { ProductivityCharts } from '@/components/dashboard/productivity-charts';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useTaskEvents, TaskEventData } from '@/hooks/useTaskEvents';
 import {
   CheckCircle2,
   Trash2,
@@ -32,7 +33,9 @@ import {
   ArrowDown,
   Repeat,
   Tag,
-  Clock
+  Clock,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -154,6 +157,92 @@ export default function DashboardPage() {
         return state.filter(t => t.id !== newTask.data.id);
       }
       return state;
+    }
+  );
+
+  // Real-time event handlers for SSE
+  const handleTaskCreated = (event: TaskEventData) => {
+    const newTask = event.payload.task_data;
+    setTasks(prevTasks => {
+      // Check if task already exists (avoid duplicates)
+      if (prevTasks.some(t => t.id === newTask.id)) {
+        return prevTasks;
+      }
+      // Add new task to the beginning of the list
+      return [newTask as Task, ...prevTasks];
+    });
+
+    // Show toast notification (only if not from this tab)
+    toast({
+      title: 'New task created',
+      description: newTask.title,
+    });
+  };
+
+  const handleTaskUpdated = (event: TaskEventData) => {
+    const updatedTask = event.payload.task_data;
+    setTasks(prevTasks =>
+      prevTasks.map(t =>
+        t.id === updatedTask.id ? { ...t, ...updatedTask } as Task : t
+      )
+    );
+
+    // Show toast notification
+    toast({
+      title: 'Task updated',
+      description: updatedTask.title,
+    });
+  };
+
+  const handleTaskCompleted = (event: TaskEventData) => {
+    const completedTask = event.payload.task_data;
+    setTasks(prevTasks =>
+      prevTasks.map(t =>
+        t.id === completedTask.id
+          ? { ...t, ...completedTask, completed: true, status: 'completed' } as Task
+          : t
+      )
+    );
+
+    // Show toast notification
+    toast({
+      title: 'Task completed',
+      description: completedTask.title,
+    });
+  };
+
+  const handleTaskDeleted = (event: TaskEventData) => {
+    const deletedTaskId = event.payload.task_data.id;
+    setTasks(prevTasks => prevTasks.filter(t => t.id !== deletedTaskId));
+
+    // Show toast notification
+    toast({
+      title: 'Task deleted',
+      description: event.payload.task_data.title,
+    });
+  };
+
+  // SSE connection for real-time updates
+  const { isConnected: isSseConnected, error: sseError, reconnect: reconnectSse } = useTaskEvents(
+    {
+      onTaskCreated: handleTaskCreated,
+      onTaskUpdated: handleTaskUpdated,
+      onTaskCompleted: handleTaskCompleted,
+      onTaskDeleted: handleTaskDeleted,
+      onConnected: () => {
+        console.log('SSE connected');
+      },
+      onDisconnected: () => {
+        console.log('SSE disconnected');
+      },
+      onError: (error) => {
+        console.error('SSE error:', error);
+      },
+    },
+    {
+      enabled: !isLoading && !!session?.user?.id,
+      userId: session?.user?.id,
+      token: session?.token,
     }
   );
 
@@ -758,6 +847,52 @@ export default function DashboardPage() {
             >
               {session?.user?.name || 'User'}. Ready to conquer the day?
             </motion.p>
+
+            {/* Real-time Connection Status Indicator */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="flex items-center gap-2 mt-3"
+            >
+              <div className={cn(
+                "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
+                isSseConnected
+                  ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                  : sseError
+                  ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                  : "bg-muted text-muted-foreground"
+              )}>
+                {isSseConnected ? (
+                  <>
+                    <Wifi className="w-3 h-3" />
+                    <span>Live Updates Active</span>
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="w-3 h-3" />
+                    <span>{sseError ? "Disconnected" : "Connecting..."}</span>
+                  </>
+                )}
+              </div>
+
+              {!isSseConnected && sseError && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={reconnectSse}
+                  className="h-7 text-xs"
+                >
+                  Reconnect
+                </Button>
+              )}
+
+              {sseError && (
+                <span className="text-xs text-muted-foreground">
+                  {sseError}
+                </span>
+              )}
+            </motion.div>
           </div>
 
           <motion.div
