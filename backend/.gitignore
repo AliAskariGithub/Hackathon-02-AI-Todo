@@ -65,3 +65,7 @@ env/
 *.db
 *.sqlite
 *.sqlite3
+
+# Environment variables
+.env*
+!.env.example

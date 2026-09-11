@@ -88,15 +88,17 @@ async def get_current_user(
 
 async def get_current_user_from_query(
     request: Request,
-    token: Optional[str] = None
+    token: Optional[str] = None,
+    access_token: Optional[str] = Cookie(None)
 ) -> Dict[str, Any]:
     """
-    Dependency to get the current user from JWT token in query parameter.
+    Dependency to get the current user from JWT token in query parameter or cookie.
     Used for SSE endpoints where EventSource API doesn't support custom headers.
 
     Args:
         request: The incoming request object
         token: JWT token from query parameter
+        access_token: JWT token from cookie
 
     Returns:
         Decoded JWT payload containing user information
@@ -104,14 +106,15 @@ async def get_current_user_from_query(
     Raises:
         HTTPException: If the token is invalid, expired, or missing
     """
-    if not token:
+    effective_token = token or access_token
+    if not effective_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated. Token required in query parameter."
+            detail="Not authenticated. Token required in query parameter or cookie."
         )
 
     try:
-        payload = decode_jwt_token(token)
+        payload = decode_jwt_token(effective_token)
 
         # Store user info in request state for later use
         user_id = payload.get("sub")

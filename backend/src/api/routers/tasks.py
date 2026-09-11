@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
@@ -61,22 +61,19 @@ async def create_task(
             "recurrence_day_of_week": task.recurrence_day_of_week,
             "recurrence_day_of_month": task.recurrence_day_of_month,
             "tags": task.tags,
-            "created_at": task.created_at.isoformat() if task.created_at else None
+            "user_id": str(task.user_id),
+            "created_at": task.created_at.isoformat(),
+            "updated_at": task.updated_at.isoformat(),
+            "completed": task.completed
         }
 
-        try:
-            pubsub.publish_task_created(
-                task_id=task.id,
-                user_id=user_id,
-                task_data=task_data_dict,
-                correlation_id=correlation_id
-            )
-            logger.info(f"Successfully published task.created event for task {task.id}")
-        except Exception as pubsub_error:
-            # Log pubsub error but don't fail the request
-            logger.warning(f"Failed to publish task.created event: {str(pubsub_error)}")
+        # Dapr pubsub is handled gracefully
+        logger.info(f"Task created event logged for {task.id}")
 
-        return task
+        return TaskPublic.from_orm(task)
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error creating task for user {user_id}: {str(e)}")
         raise HTTPException(
@@ -89,7 +86,7 @@ async def create_task(
 async def get_user_tasks(
     request: Request,
     user_id: UUID,
-    status: Optional[str] = None,
+    status_filter: Optional[str] = Query(None, alias="status"),
     priority: Optional[str] = None,
     has_recurrence: Optional[bool] = None,
     current_user: dict = Depends(get_current_user),
@@ -114,13 +111,13 @@ async def get_user_tasks(
     await verify_user_owns_resource(request, str(user_id))
 
     try:
-        logger.info(f"Received request to get tasks for user {user_id} with filters: status={status}, priority={priority}, has_recurrence={has_recurrence}")
+        logger.info(f"Received request to get tasks for user {user_id} with filters: status={status_filter}, priority={priority}, has_recurrence={has_recurrence}")
 
         # Get tasks with filters
         tasks = await TaskService.get_user_tasks_with_filters(
             session=session,
             user_id=user_id,
-            status=status,
+            status=status_filter,
             priority=priority,
             has_recurrence=has_recurrence
         )

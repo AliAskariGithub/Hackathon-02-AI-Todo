@@ -1,12 +1,13 @@
 """
 Utility functions for running the task agent.
 Implements the run_task_agent function to process user queries with proper authentication context.
-Uses OpenRouter's chat completions API with function calling support.
+Supports native Groq/OpenAI tool calling, XML tool calling (<tool_call><function=...>), and JSON tool calling.
 """
 import os
 import requests
 import asyncio
 import json
+import re
 from typing import Dict, Any, List, Optional
 
 # Import MCP tool schemas and wrapper functions
@@ -25,141 +26,11 @@ from src.mcp.tools.task_tools import (
     search_tasks_wrapper
 )
 
-# Define agent instructions with JSON-based tool calling
-TODO_AGENT_INSTRUCTIONS = """
-You are a helpful task management assistant. You can help users manage their tasks using the following tools:
-
-AVAILABLE TOOLS:
-1. search_tasks(query, limit) - Find tasks by title
-2. add_task(title, description, priority, due_date, recurrence, recurrence_day_of_week, recurrence_day_of_month, tags) - Create new task
-3. list_tasks(status, priority, has_recurrence, limit, offset) - List all tasks
-4. complete_task(task_id) - Mark task as completed
-5. update_task(task_id, title, description, priority, status, due_date, tags) - Update ANY task property
-6. delete_task(task_id) - Delete a task
-
-IMPORTANT: add_task parameters:
-- title (required) - Task title
-- description (optional) - Task description
-- priority (optional) - "High", "Medium", or "Low"
-- due_date (optional) - ISO format date-time (e.g., "2026-02-17T09:00:00")
-- recurrence (optional) - "Daily", "Weekly", or "Monthly"
-- recurrence_day_of_week (optional) - For Weekly: 0=Monday, 1=Tuesday, 2=Wednesday, 3=Thursday, 4=Friday, 5=Saturday, 6=Sunday
-- recurrence_day_of_month (optional) - For Monthly: 1-31 (day of month)
-- tags (optional) - Array of strings (e.g., ["work", "urgent"])
-
-IMPORTANT: update_task CAN update priority! Valid parameters are:
-- task_id (required)
-- title (optional)
-- description (optional)
-- priority (optional) - "High", "Medium", or "Low"
-- status (optional) - "pending", "in_progress", or "completed"
-- due_date (optional)
-- tags (optional)
-
-CRITICAL INSTRUCTIONS FOR TOOL CALLING:
-1. When you need to use a tool, respond with ONLY the JSON tool call(s), nothing else
-2. DO NOT add any explanatory text before or after the JSON
-3. DO NOT show JSON to the user - it will be executed automatically
-4. For multiple tools, put each JSON on a separate line
-5. After tools execute, you'll get results and can respond naturally
-
-CORRECT FORMAT (tools execute silently):
-{"tool": "list_tasks", "parameters": {"status": "all"}}
-{"tool": "update_task", "parameters": {"task_id": "abc-123", "priority": "High"}}
-
-WRONG FORMAT (shows JSON to user):
-I will list your tasks.
-{"tool": "list_tasks", "parameters": {"status": "all"}}
-
-WORKFLOW FOR TASK OPERATIONS:
-1. User mentions task by NAME → Use search_tasks first to get task_id
-2. User wants to update ALL tasks → Use list_tasks, then update_task for each
-3. User wants to create task → Use add_task, then update_task if needed
-
-EXAMPLES:
-
-Example 1: Complete specific task
-User: "Complete the task called Buy milk"
-You: {"tool": "search_tasks", "parameters": {"query": "Buy milk"}}
-     {"tool": "complete_task", "parameters": {"task_id": "{{from_search}}"}}
-[Tools execute, you get results]
-You: "I've marked 'Buy milk' as completed!"
-
-Example 2: Update all tasks priority
-User: "Set all tasks to high priority"
-You: {"tool": "list_tasks", "parameters": {"status": "all"}}
-     {"tool": "update_task", "parameters": {"task_id": "id1", "priority": "High"}}
-     {"tool": "update_task", "parameters": {"task_id": "id2", "priority": "High"}}
-     {"tool": "update_task", "parameters": {"task_id": "id3", "priority": "High"}}
-[Tools execute, you get results]
-You: "I've set all 3 tasks to high priority!"
-
-Example 3: Complete multiple tasks
-User: "Mark all Test tasks as done"
-You: {"tool": "search_tasks", "parameters": {"query": "Test"}}
-     {"tool": "complete_task", "parameters": {"task_id": "id1"}}
-     {"tool": "complete_task", "parameters": {"task_id": "id2"}}
-[Tools execute, you get results]
-You: "I've completed 2 tasks starting with 'Test'!"
-
-Example 4: Add urgent task
-User: "Add urgent task to call dentist"
-You: {"tool": "add_task", "parameters": {"title": "Call dentist", "priority": "High"}}
-[Tool executes, you get result]
-You: "I've added 'Call dentist' as a high priority task!"
-
-Example 5: Add weekly recurring task
-User: "Add task: Team standup meeting every Monday at 9am with high priority"
-You: {"tool": "add_task", "parameters": {"title": "Team standup meeting", "priority": "High", "due_date": "2026-02-17T09:00:00", "recurrence": "Weekly", "recurrence_day_of_week": 0}}
-[Tool executes, you get result]
-You: "I've added 'Team standup meeting' as a high priority weekly task for every Monday at 9am!"
-
-Example 6: Add monthly recurring task
-User: "Add task: Pay rent on the 1st of every month with high priority"
-You: {"tool": "add_task", "parameters": {"title": "Pay rent", "priority": "High", "recurrence": "Monthly", "recurrence_day_of_month": 1}}
-[Tool executes, you get result]
-You: "I've added 'Pay rent' as a high priority monthly task on the 1st!"
-
-Example 7: Add daily task with tags
-User: "Create daily task: Morning workout at 6am with tags fitness, health, routine"
-You: {"tool": "add_task", "parameters": {"title": "Morning workout", "due_date": "2026-02-13T06:00:00", "recurrence": "Daily", "tags": ["fitness", "health", "routine"]}}
-[Tool executes, you get result]
-You: "I've added 'Morning workout' as a daily task at 6am with tags fitness, health, and routine!"
-
-Example 8: Add task with all fields
-User: "Add task: Team standup meeting every Monday at 9am with high priority, description 'Weekly sync with the team', and tags work, meeting, recurring"
-You: {"tool": "add_task", "parameters": {"title": "Team standup meeting", "description": "Weekly sync with the team", "priority": "High", "due_date": "2026-02-17T09:00:00", "recurrence": "Weekly", "recurrence_day_of_week": 0, "tags": ["work", "meeting", "recurring"]}}
-[Tool executes, you get result]
-You: "I've created 'Team standup meeting' as a high priority weekly task for every Monday at 9am with tags work, meeting, and recurring!"
-
-PRIORITY KEYWORDS:
-- "urgent", "important", "asap", "critical" → priority: "High"
-- "low priority", "whenever", "someday" → priority: "Low"
-
-RECURRENCE KEYWORDS AND PARAMETERS:
-- "every day", "daily" → recurrence: "Daily" (no day_of_week or day_of_month needed)
-- "every week", "weekly", "every Monday" → recurrence: "Weekly", recurrence_day_of_week: 0-6
-  - Monday=0, Tuesday=1, Wednesday=2, Thursday=3, Friday=4, Saturday=5, Sunday=6
-- "every month", "monthly", "on the 1st", "on the 15th" → recurrence: "Monthly", recurrence_day_of_month: 1-31
-
-DATE/TIME EXTRACTION:
-- "tomorrow" → Calculate tomorrow's date in ISO format
-- "next Monday" → Calculate next Monday's date in ISO format
-- "at 9am" → Set time to 09:00:00 in ISO format
-- "at 2pm" → Set time to 14:00:00 in ISO format
-
-TAGS EXTRACTION:
-- "with tags work, meeting" → tags: ["work", "meeting"]
-- "and tag urgent" → tags: ["urgent"]
-
-REMEMBER:
-- NEVER show JSON to users
-- Execute tools silently
-- Provide clean, natural language responses after execution
-- Use simple, friendly language (grade 6-8 level)
-- Be concise and clear
-- update_task CAN change priority, status, title, description, due_date, and tags
-"""
+# Define agent instructions with concise, token-efficient prompt
+TODO_AGENT_INSTRUCTIONS = """You are a helpful AI assistant for managing todo tasks.
+Use the provided tools to add, list, complete, update, search, or delete tasks for the authenticated user.
+When creating tasks, infer appropriate priority (High, Medium, Low) and description if not specified.
+Always call the appropriate tool when asked to manage tasks."""
 
 # Map tool names to their wrapper functions
 TOOL_FUNCTIONS = {
@@ -169,6 +40,43 @@ TOOL_FUNCTIONS = {
     "update_task": update_task_wrapper,
     "delete_task": delete_task_wrapper,
     "search_tasks": search_tasks_wrapper
+}
+
+# Aliases for common model hallucinations in tool names
+TOOL_ALIASES = {
+    "add_task": "add_task",
+    "taskcreate": "add_task",
+    "task_create": "add_task",
+    "create_task": "add_task",
+    "createtask": "add_task",
+    "new_task": "add_task",
+    "addtask": "add_task",
+    "list_tasks": "list_tasks",
+    "tasklist": "list_tasks",
+    "task_list": "list_tasks",
+    "get_tasks": "list_tasks",
+    "listtasks": "list_tasks",
+    "show_tasks": "list_tasks",
+    "complete_task": "complete_task",
+    "taskcomplete": "complete_task",
+    "task_complete": "complete_task",
+    "completetask": "complete_task",
+    "mark_completed": "complete_task",
+    "update_task": "update_task",
+    "taskupdate": "update_task",
+    "task_update": "update_task",
+    "updatetask": "update_task",
+    "edit_task": "update_task",
+    "delete_task": "delete_task",
+    "taskdelete": "delete_task",
+    "task_delete": "delete_task",
+    "deletetask": "delete_task",
+    "remove_task": "delete_task",
+    "search_tasks": "search_tasks",
+    "tasksearch": "search_tasks",
+    "task_search": "search_tasks",
+    "searchtasks": "search_tasks",
+    "find_tasks": "search_tasks"
 }
 
 # All available tools in OpenAI function calling format
@@ -182,10 +90,76 @@ ALL_TOOLS = [
 ]
 
 
+def parse_xml_tool_calls(content: str) -> List[Dict[str, Any]]:
+    """Parse XML-style tool calls (e.g. <tool_call><function=TaskCreate>...</function></tool_call>)."""
+    calls = []
+    if not content:
+        return calls
+
+    blocks = re.findall(r'<tool_call>(.*?)</tool_call>', content, re.DOTALL | re.IGNORECASE)
+    if not blocks and ('<function=' in content or '<function ' in content):
+        blocks = [content]
+
+    for block in blocks:
+        func_match = re.search(r'<function[=\s]+([a-zA-Z0-9_-]+)>(.*?)</function>', block, re.DOTALL | re.IGNORECASE)
+        if func_match:
+            func_name = func_match.group(1).strip()
+            body = func_match.group(2)
+            param_matches = re.findall(r'<parameter[=\s]+([a-zA-Z0-9_-]+)>(.*?)</parameter>', body, re.DOTALL | re.IGNORECASE)
+            params = {}
+            for p_name, p_val in param_matches:
+                val = p_val.strip()
+                try:
+                    params[p_name] = json.loads(val)
+                except Exception:
+                    params[p_name] = val
+            calls.append({"tool": func_name, "parameters": params})
+    return calls
+
+
+def parse_json_tool_calls(content: str) -> List[Dict[str, Any]]:
+    """Parse JSON-style tool calls from text."""
+    calls = []
+    if not content:
+        return calls
+
+    p1 = r'\{[^{}]*"tool"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}'
+    for match in re.finditer(p1, content, re.DOTALL):
+        try:
+            parsed = json.loads(match.group(0))
+            if "tool" in parsed and "parameters" in parsed:
+                calls.append(parsed)
+        except Exception:
+            pass
+
+    p2 = r'\{[^{}]*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[^}]*\}\s*\}'
+    for match in re.finditer(p2, content, re.DOTALL):
+        try:
+            parsed = json.loads(match.group(0))
+            if "name" in parsed and "arguments" in parsed:
+                calls.append({"tool": parsed["name"], "parameters": parsed["arguments"]})
+        except Exception:
+            pass
+
+    return calls
+
+
+def clean_llm_response(text: str) -> str:
+    """Clean all tool call markup and tags from LLM responses."""
+    if not text:
+        return ""
+    text = re.sub(r'<tool_call>.*?</tool_call>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'<function[=\s]+[a-zA-Z0-9_-]+>.*?</function>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'<parameter[=\s]+[a-zA-Z0-9_-]+>.*?</parameter>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'\{[^{}]*"tool"\s*:[^{}]*\}', '', text, flags=re.DOTALL)
+    # Remove leading/trailing empty lines
+    return text.strip()
+
+
 async def run_task_agent(user_query: str, user_id: str, conversation_history: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """
-    Process a user's natural language query using the task management AI agent with JSON-based tool calling.
-    Uses OpenRouter's chat completions API with prompt-based tool execution.
+    Process a user's natural language query using the task management AI agent.
+    Supports native Groq tool calling as well as XML/JSON prompt fallbacks.
 
     Args:
         user_query: Natural language query from the user (e.g., "Add a task to buy milk")
@@ -201,6 +175,8 @@ async def run_task_agent(user_query: str, user_id: str, conversation_history: Op
         if not api_key:
             raise ValueError("GROQ_API_KEY not found in environment variables")
 
+        model_name = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
+
         # Create the system message with instructions and user context
         system_message = f"{TODO_AGENT_INSTRUCTIONS}\n\nContext: The current user ID is {user_id}. All operations must be performed for this user only."
 
@@ -210,14 +186,17 @@ async def run_task_agent(user_query: str, user_id: str, conversation_history: Op
             messages.extend(conversation_history)
         messages.append({"role": "user", "content": user_query})
 
-        # Make initial request to Groq
-        def make_request(request_messages):
+        # Request helper to Groq
+        def make_request(request_messages, use_tools=True):
             payload = {
-                "model": os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+                "model": model_name,
                 "messages": request_messages,
-                "temperature": 0.7,
+                "temperature": 0.3,
                 "max_tokens": 1000
             }
+            if use_tools:
+                payload["tools"] = ALL_TOOLS
+                payload["tool_choice"] = "auto"
 
             response = requests.post(
                 "https://api.groq.com/openai/v1/chat/completions",
@@ -234,120 +213,137 @@ async def run_task_agent(user_query: str, user_id: str, conversation_history: Op
             return response.json()
 
         # Run the synchronous request in a thread pool to avoid blocking
-        result = await asyncio.to_thread(make_request, messages)
+        result = await asyncio.to_thread(make_request, messages, True)
 
         # Extract the assistant's message
         assistant_message = result["choices"][0]["message"]
-        assistant_content = assistant_message.get("content", "")
+        assistant_content = assistant_message.get("content", "") or ""
 
-        # Try to parse JSON tool calls from the response
+        # Extract tool calls from all possible formats
+        extracted_tool_calls: List[Dict[str, Any]] = []
+
+        # Format 1: Native OpenAI / Groq tool_calls
+        raw_native_calls = assistant_message.get("tool_calls") or []
+        for tc in raw_native_calls:
+            fn = tc.get("function", {})
+            fn_name = fn.get("name")
+            fn_args_raw = fn.get("arguments", "{}")
+            if isinstance(fn_args_raw, str):
+                try:
+                    fn_args = json.loads(fn_args_raw)
+                except Exception:
+                    fn_args = {}
+            else:
+                fn_args = fn_args_raw or {}
+            if fn_name:
+                extracted_tool_calls.append({"tool": fn_name, "parameters": fn_args})
+
+        # Format 2: XML tool calls (<tool_call><function=...>) in text
+        if not extracted_tool_calls:
+            xml_calls = parse_xml_tool_calls(assistant_content)
+            if xml_calls:
+                extracted_tool_calls.extend(xml_calls)
+
+        # Format 3: JSON tool calls ({"tool": ...}) in text
+        if not extracted_tool_calls:
+            json_calls = parse_json_tool_calls(assistant_content)
+            if json_calls:
+                extracted_tool_calls.extend(json_calls)
+
         tool_call_executed = False
         executed_tools = []
 
-        try:
-            # Extract all JSON objects from the response (even if there's surrounding text)
-            import re
+        # Execute any discovered tool calls
+        if extracted_tool_calls:
+            for tc in extracted_tool_calls:
+                raw_name = str(tc.get("tool", "")).strip()
+                normalized_key = raw_name.lower().replace("-", "_").replace(" ", "_")
+                tool_name = TOOL_ALIASES.get(normalized_key, raw_name)
+                tool_params = tc.get("parameters", {}) or {}
 
-            # Find all JSON objects in the response
-            json_pattern = r'\{[^{}]*"tool"[^{}]*"parameters"[^{}]*\{[^}]*\}[^}]*\}'
-            json_matches = re.findall(json_pattern, assistant_content)
+                # Parameter normalization
+                if "name" in tool_params and "title" not in tool_params:
+                    tool_params["title"] = tool_params["name"]
+                if "task_title" in tool_params and "title" not in tool_params:
+                    tool_params["title"] = tool_params["task_title"]
+                if "priority" in tool_params and isinstance(tool_params["priority"], str):
+                    tool_params["priority"] = tool_params["priority"].strip().capitalize()
+                if "recurrence" in tool_params and isinstance(tool_params["recurrence"], str):
+                    tool_params["recurrence"] = tool_params["recurrence"].strip().capitalize()
 
-            tool_calls = []
-            for json_str in json_matches:
-                try:
-                    tool_call = json.loads(json_str)
-                    if "tool" in tool_call and "parameters" in tool_call:
-                        tool_calls.append(tool_call)
-                except json.JSONDecodeError:
-                    continue
+                # Inject user_id
+                tool_params["user_id"] = user_id
 
-            # Execute all tool calls silently
-            if tool_calls:
-                for tool_call in tool_calls:
-                    tool_name = tool_call["tool"]
-                    tool_params = tool_call["parameters"]
-
-                    # Inject user_id into tool parameters
-                    tool_params["user_id"] = user_id
-
-                    # Execute the tool
-                    if tool_name in TOOL_FUNCTIONS:
-                        tool_function = TOOL_FUNCTIONS[tool_name]
-                        tool_result = await tool_function(tool_params)
-
-                        # Store tool execution info
+                if tool_name in TOOL_FUNCTIONS:
+                    tool_func = TOOL_FUNCTIONS[tool_name]
+                    try:
+                        tool_result = await tool_func(tool_params)
                         executed_tools.append({
                             "name": tool_name,
                             "arguments": tool_params,
                             "result": tool_result
                         })
-
                         tool_call_executed = True
+                    except Exception as e:
+                        print(f"Error executing tool {tool_name}: {e}")
+                        executed_tools.append({
+                            "name": tool_name,
+                            "arguments": tool_params,
+                            "result": {"success": False, "message": str(e)}
+                        })
 
-                # If any tools were executed, get final natural language response
-                if tool_call_executed:
-                    # Format all tool results for the AI
-                    results_summary = []
-                    for tool in executed_tools:
-                        tool_name = tool['name']
-                        result = tool['result']
+            # If tools were executed, generate a clean natural language confirmation
+            if tool_call_executed:
+                results_summary = []
+                for tool in executed_tools:
+                    t_name = tool['name']
+                    result = tool['result']
 
-                        if result.get('success'):
-                            if tool_name == 'search_tasks':
-                                tasks = result.get('tasks', [])
-                                results_summary.append(f"Found {len(tasks)} tasks: {[t['title'] for t in tasks]}")
-                            elif tool_name == 'complete_task':
-                                results_summary.append(f"Completed task successfully")
-                            elif tool_name == 'add_task':
-                                results_summary.append(f"Created task: {result.get('message', 'Task created')}")
-                            elif tool_name == 'update_task':
-                                results_summary.append(f"Updated task successfully")
-                            elif tool_name == 'delete_task':
-                                results_summary.append(f"Deleted task successfully")
-                            elif tool_name == 'list_tasks':
-                                count = result.get('returned_count', 0)
-                                results_summary.append(f"Retrieved {count} tasks")
-                        else:
-                            error_msg = result.get('message', 'Operation failed')
-                            results_summary.append(f"Error: {error_msg}")
+                    if result.get('success'):
+                        if t_name == 'add_task':
+                            task_info = result.get('task', {})
+                            results_summary.append(f"Created task '{task_info.get('title', 'New Task')}' with priority {task_info.get('priority', 'Medium')}")
+                        elif t_name == 'complete_task':
+                            results_summary.append("Completed task successfully")
+                        elif t_name == 'update_task':
+                            results_summary.append("Updated task successfully")
+                        elif t_name == 'delete_task':
+                            results_summary.append("Deleted task successfully")
+                        elif t_name == 'search_tasks':
+                            tasks = result.get('tasks', [])
+                            results_summary.append(f"Found {len(tasks)} tasks")
+                        elif t_name == 'list_tasks':
+                            count = result.get('returned_count', 0)
+                            results_summary.append(f"Retrieved {count} tasks")
+                    else:
+                        results_summary.append(f"{t_name} error: {result.get('message', 'Operation failed')}")
 
-                    # Ask AI to provide a clean natural language response
-                    messages.append({
-                        "role": "user",
-                        "content": f"Tool execution completed. Results: {'; '.join(results_summary)}. Please provide a brief, friendly response to the user (2-3 sentences max). DO NOT show any JSON or technical details."
-                    })
+                final_clean = None
+                try:
+                    confirm_messages = [
+                        {"role": "system", "content": "You are a helpful task assistant. Respond in 1 friendly sentence."},
+                        {"role": "user", "content": f"The operations completed: {'; '.join(results_summary)}. Provide a 1-sentence friendly confirmation to the user. Do not show technical terms, XML, or JSON."}
+                    ]
+                    final_result = await asyncio.to_thread(make_request, confirm_messages, False)
+                    final_content = final_result["choices"][0]["message"]["content"]
+                    final_clean = clean_llm_response(final_content)
+                except Exception:
+                    # Fallback to direct summary message if LLM is rate-limited
+                    final_clean = "; ".join(results_summary) + "."
 
-                    # Make second request to get final response
-                    final_result = await asyncio.to_thread(make_request, messages)
-                    final_response = final_result["choices"][0]["message"]["content"]
+                return {
+                    "success": True,
+                    "response": final_clean or "I've successfully performed the requested task operation.",
+                    "tool_calls": executed_tools,
+                    "user_id": user_id,
+                    "status": "completed"
+                }
 
-                    # Clean up any remaining JSON from the response
-                    final_response = re.sub(r'\{[^{}]*"tool"[^{}]*\}', '', final_response).strip()
-
-                    return {
-                        "success": True,
-                        "response": final_response,
-                        "tool_calls": executed_tools,
-                        "user_id": user_id,
-                        "status": "completed"
-                    }
-        except json.JSONDecodeError:
-            # Not a JSON tool call, treat as regular response
-            pass
-        except Exception as e:
-            # Tool execution failed, but continue with the response
-            print(f"Tool execution error: {str(e)}")
-            import traceback
-            traceback.print_exc()
-
-        # No tool call or tool execution failed - return the text response
-        # Clean up any JSON that might be in the response
-        import re
-        clean_response = re.sub(r'\{[^{}]*"tool"[^{}]*\}', '', assistant_content).strip()
-
+        # If no tool call was found or executed, return the cleaned assistant response
+        clean_response = clean_llm_response(assistant_content)
         return {
             "success": True,
-            "response": clean_response if clean_response else "I understand, but I'm not sure how to help with that.",
+            "response": clean_response if clean_response else "I understand, but I'm not sure how to help with that. Could you clarify?",
             "tool_calls": executed_tools if executed_tools else None,
             "user_id": user_id,
             "status": "completed"
@@ -355,19 +351,27 @@ async def run_task_agent(user_query: str, user_id: str, conversation_history: Op
 
     except requests.exceptions.HTTPError as e:
         error_msg = f"API error: {str(e)}"
-        status = "error"
+        status_text = "error"
 
-        # Check if it's a rate limit error (429)
+        try:
+            error_json = e.response.json()
+            if isinstance(error_json, dict) and "error" in error_json:
+                err_detail = error_json["error"]
+                if isinstance(err_detail, dict) and "message" in err_detail:
+                    error_msg = f"AI Service Error: {err_detail['message']}"
+        except Exception:
+            pass
+
         if e.response.status_code == 429:
             error_msg = "Rate limit exceeded. Please try again after 24 hours."
-            status = "rate_limited"
+            status_text = "rate_limited"
 
         return {
             "success": False,
             "response": error_msg,
             "tool_calls": None,
             "user_id": user_id,
-            "status": status,
+            "status": status_text,
             "http_status": e.response.status_code if hasattr(e, 'response') else 500
         }
     except Exception as e:
@@ -382,16 +386,6 @@ async def run_task_agent(user_query: str, user_id: str, conversation_history: Op
 
 async def run_task_agent_with_context(user_query: str, user_id: str) -> Dict[str, Any]:
     """
-    Alternative implementation that might be better for the MCP context.
-    Processes a user's query with authentication context using MCP tools.
-
-    Args:
-        user_query: Natural language query from the user
-        user_id: Authenticated user's ID to bind to all operations
-
-    Returns:
-        Dict containing the response from the agent
+    Alternative implementation for running the agent with context.
     """
-    # This would integrate with the MCP framework to run tools with the proper context
-    # For now, it delegates to the main run_task_agent function
     return await run_task_agent(user_query, user_id)

@@ -49,13 +49,25 @@ async def add_task(user_id: str, title: str, description: Optional[str] = None,
         session_factory = get_async_session_factory()
 
         async with session_factory() as session:
+            norm_priority = "Medium"
+            if priority and isinstance(priority, str):
+                cap_p = priority.strip().capitalize()
+                if cap_p in ["High", "Medium", "Low"]:
+                    norm_priority = cap_p
+
+            norm_recurrence = None
+            if recurrence and isinstance(recurrence, str):
+                cap_r = recurrence.strip().capitalize()
+                if cap_r in ["Daily", "Weekly", "Monthly"]:
+                    norm_recurrence = cap_r
+
             task_create = TaskCreate(
                 title=title,
                 description=description or "",
-                priority=priority or "Medium",
+                priority=norm_priority,
                 status="pending",
                 due_date=due_date,
-                recurrence=recurrence,
+                recurrence=norm_recurrence,
                 recurrence_day_of_week=recurrence_day_of_week,
                 recurrence_day_of_month=recurrence_day_of_month,
                 tags=tags or []
@@ -264,7 +276,10 @@ async def update_task(user_id: str, task_id: str, title: Optional[str] = None,
         if description is not None:
             update_data["description"] = description
         if priority is not None:
-            update_data["priority"] = priority
+            if isinstance(priority, str) and priority.strip().capitalize() in ["High", "Medium", "Low"]:
+                update_data["priority"] = priority.strip().capitalize()
+            else:
+                update_data["priority"] = priority
         if status is not None:
             update_data["status"] = status
         if due_date is not None:

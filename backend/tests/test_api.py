@@ -16,18 +16,23 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 @pytest.fixture
 def client():
     """Create a test client for the API with mocked database session"""
-    # Create a mock async session
+    from unittest.mock import MagicMock
     mock_session = AsyncMock(spec=AsyncSession)
 
-    # Mock the exec method that's used by the services
-    mock_exec_result = AsyncMock()
+    mock_scalars = MagicMock()
+    mock_scalars.all.return_value = []
+    mock_scalars.first.return_value = None
+
+    mock_exec_result = MagicMock()
+    mock_exec_result.scalars.return_value = mock_scalars
     mock_exec_result.all.return_value = []
     mock_exec_result.first.return_value = None
 
     mock_session.exec = AsyncMock(return_value=mock_exec_result)
+    mock_session.execute = AsyncMock(return_value=mock_exec_result)
 
     # Mock other methods that might be used
-    mock_session.add = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.commit = AsyncMock()
     mock_session.refresh = AsyncMock()
     mock_session.delete = AsyncMock()
@@ -62,15 +67,18 @@ def test_health_endpoint(client):
 
 def test_routes_exist(client):
     """Test that the API routes exist (with mocked database)"""
+    from src.utils.jwt import create_access_token
     user_id = str(uuid4())
+    token = create_access_token(data={"sub": user_id, "email": "test@example.com"})
+    headers = {"Authorization": f"Bearer {token}"}
 
     # Test GET /api/{user_id}/tasks
-    response = client.get(f"/api/{user_id}/tasks")
+    response = client.get(f"/api/{user_id}/tasks", headers=headers)
     # With mocked DB, this should return 200 with empty list or potentially 500 if mock isn't perfect
     assert response.status_code in [200, 500]
 
     # Test POST /api/{user_id}/tasks
-    response = client.post(f"/api/{user_id}/tasks", json={
+    response = client.post(f"/api/{user_id}/tasks", headers=headers, json={
         "title": "Test Task",
         "description": "Test Description",
         "completed": False
@@ -80,5 +88,5 @@ def test_routes_exist(client):
 
     # Test GET /api/{user_id}/tasks/{task_id}
     task_id = str(uuid4())
-    response = client.get(f"/api/{user_id}/tasks/{task_id}")
+    response = client.get(f"/api/{user_id}/tasks/{task_id}", headers=headers)
     assert response.status_code in [200, 404, 500]  # Could return found, not found, or error
