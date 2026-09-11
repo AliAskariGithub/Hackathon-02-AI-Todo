@@ -11,11 +11,11 @@ replicaCount:
 image:
   frontend:
     repository: ai-todo-frontend
-    tag: v1.0.0
+    tag: latest
     pullPolicy: IfNotPresent
   backend:
     repository: ai-todo-backend
-    tag: v1.0.0
+    tag: latest
     pullPolicy: IfNotPresent
 
 # Service configuration
@@ -94,10 +94,10 @@ config:
 # Secrets (sensitive - provide via --set or separate values file)
 # DO NOT commit actual secrets to version control
 secrets:
-  databaseUrl: "postgresql+asyncpg://user:password@host:port/database"
-  betterAuthSecret: "change-me-min-32-chars-required"
-  jwtSecret: "change-me-min-32-chars-required"
-  groqApiKey: "change-me-groq-api-key"
+  databaseUrl: ""
+  betterAuthSecret: ""
+  jwtSecret: ""
+  groqApiKey: ""
 
 # Autoscaling (optional - for future use)
 autoscaling:

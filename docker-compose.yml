@@ -100,6 +100,32 @@ services:
       timeout: 10s
       retries: 3
 
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: ai-todo-frontend:latest
+    container_name: ai-todo-frontend
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./frontend/.env.docker
+    environment:
+      NODE_ENV: production
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - ai-todo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   # Backend API
   backend:
     build:
@@ -111,13 +137,10 @@ services:
       - "8000:8000"
     env_file:
       - ./backend/.env.docker
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/ai_todo
+    environment:    
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
     depends_on:
-      postgres:
-        condition: service_healthy
       kafka:
         condition: service_healthy
     networks:
@@ -207,7 +230,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/ai_todo
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
-      BACKEND_API_URL: http://backend:8000
+      BACKEND_API_URL: http://localhost:8000
       SERVICE_NAME: recurring-service
       SERVICE_PORT: "8002"
     depends_on:
@@ -224,44 +247,6 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # Frontend
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
-        NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
-        NEXT_PUBLIC_SITE_URL: http://localhost:3000
-        NEXT_PUBLIC_BETTER_AUTH_URL: http://localhost:3000
-        BETTER_AUTH_SECRET: egz3jkCGjvTJ27lpHpCW99i7vg7LtfSW
-    image: ai-todo-frontend:latest
-    container_name: ai-todo-frontend
-    ports:
-      - "3000:3000"
-    environment:
-      NODE_ENV: production
-      # Server-side env vars (for API routes) - use Docker service names
-      BACKEND_API_URL: http://backend:8000
-      # Client-side env vars (for browser) - use localhost
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
-      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
-      NEXT_PUBLIC_SITE_URL: http://localhost:3000
-      NEXT_PUBLIC_BETTER_AUTH_URL: http://localhost:3000
-      BETTER_AUTH_SECRET: egz3jkCGjvTJ27lpHpCW99i7vg7LtfSW
-    depends_on:
-      backend:
-        condition: service_healthy
-    networks:
-      - ai-todo-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/"]
       interval: 30s
       timeout: 10s
       retries: 3
