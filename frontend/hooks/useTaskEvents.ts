@@ -45,6 +45,8 @@ export interface TaskEventHandlers {
 export interface UseTaskEventsOptions {
   enabled?: boolean;
   reconnectDelay?: number;
+  userId?: string;
+  token?: string;
 }
 
 export interface UseTaskEventsReturn {
@@ -67,136 +69,24 @@ export function useTaskEvents(
   handlers: TaskEventHandlers,
   options: UseTaskEventsOptions = {}
 ): UseTaskEventsReturn {
-  const { enabled = true, reconnectDelay = RECONNECT_DELAY } = options;
+  const enabled = options.enabled ?? true;
+  const reconnectDelay = options.reconnectDelay ?? RECONNECT_DELAY;
+  const userId = options.userId;
+  const token = options.token;
 
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Keep handlers in a ref so changes never cause connect/disconnect to be recreated
+  const handlersRef = useRef<TaskEventHandlers>(handlers);
+  useEffect(() => {
+    handlersRef.current = handlers;
+  }, [handlers]);
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const isManualCloseRef = useRef(false);
-
-  /**
-   * Connect to SSE endpoint
-   */
-  const connect = useCallback(() => {
-    // Don't connect if disabled or already connected
-    if (!enabled || eventSourceRef.current) {
-      return;
-    }
-
-    try {
-      // Get JWT token from localStorage
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setError('No authentication token found');
-        return;
-      }
-
-      // Decode token to get user_id
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const userId = payload.sub || payload.user_id;
-
-      if (!userId) {
-        setError('Invalid token: missing user_id');
-        return;
-      }
-
-      // Create EventSource with token in URL (EventSource doesn't support custom headers)
-      // Note: In production, consider using a more secure method
-      const url = `/api/events/stream?user_id=${userId}`;
-      const eventSource = new EventSource(url);
-
-      eventSourceRef.current = eventSource;
-      isManualCloseRef.current = false;
-
-      // Handle connection open
-      eventSource.onopen = () => {
-        console.log('SSE connection established');
-        setIsConnected(true);
-        setError(null);
-        reconnectAttemptsRef.current = 0;
-        handlers.onConnected?.();
-      };
-
-      // Handle incoming messages
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-
-          // Handle different event types
-          if (data.type === 'heartbeat') {
-            // Heartbeat - connection is alive
-            return;
-          }
-
-          if (data.type === 'connected') {
-            // Initial connection message
-            console.log('SSE connected:', data);
-            return;
-          }
-
-          if (data.type === 'error') {
-            console.error('SSE error message:', data.message);
-            setError(data.message);
-            return;
-          }
-
-          // Handle task events
-          const taskEvent = data as TaskEventData;
-          switch (taskEvent.event_type) {
-            case 'task.created':
-              handlers.onTaskCreated?.(taskEvent);
-              break;
-            case 'task.updated':
-              handlers.onTaskUpdated?.(taskEvent);
-              break;
-            case 'task.completed':
-              handlers.onTaskCompleted?.(taskEvent);
-              break;
-            case 'task.deleted':
-              handlers.onTaskDeleted?.(taskEvent);
-              break;
-            default:
-              console.warn('Unknown event type:', taskEvent.event_type);
-          }
-        } catch (err) {
-          console.error('Error parsing SSE message:', err);
-        }
-      };
-
-      // Handle errors
-      eventSource.onerror = (event) => {
-        console.error('SSE connection error:', event);
-        setIsConnected(false);
-        handlers.onError?.(event);
-
-        // Close the connection
-        eventSource.close();
-        eventSourceRef.current = null;
-
-        // Attempt reconnection if not manually closed
-        if (!isManualCloseRef.current && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
-          reconnectAttemptsRef.current += 1;
-          const delay = reconnectDelay * reconnectAttemptsRef.current; // Exponential backoff
-
-          console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
-          setError(`Connection lost. Reconnecting... (attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
-
-          reconnectTimeoutRef.current = setTimeout(() => {
-            connect();
-          }, delay);
-        } else if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
-          setError('Max reconnection attempts reached. Please refresh the page.');
-          handlers.onDisconnected?.();
-        }
-      };
-    } catch (err) {
-      console.error('Error creating SSE connection:', err);
-      setError(err instanceof Error ? err.message : 'Failed to connect');
-    }
-  }, [enabled, reconnectDelay, handlers]);
 
   /**
    * Disconnect from SSE endpoint
@@ -215,8 +105,113 @@ export function useTaskEvents(
     }
 
     setIsConnected(false);
-    handlers.onDisconnected?.();
-  }, [handlers]);
+    handlersRef.current.onDisconnected?.();
+  }, []);
+
+  /**
+   * Connect to SSE endpoint
+   */
+  const connect = useCallback(() => {
+    // Don't connect if disabled, missing userId, or already active
+    if (!enabled || !userId || eventSourceRef.current) {
+      return;
+    }
+
+    try {
+      // Get JWT token from props or localStorage ('access_token' or 'token')
+      const effectiveToken = token || (typeof window !== 'undefined'
+        ? (localStorage.getItem('access_token') || localStorage.getItem('token'))
+        : null);
+
+      // Connect to backend SSE endpoint
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+      const tokenParam = effectiveToken ? `&token=${encodeURIComponent(effectiveToken)}` : '';
+      const url = `${apiBaseUrl}/api/events/stream?user_id=${encodeURIComponent(userId)}${tokenParam}`;
+
+      const eventSource = new EventSource(url, { withCredentials: true });
+      eventSourceRef.current = eventSource;
+      isManualCloseRef.current = false;
+
+      // Handle connection open
+      eventSource.onopen = () => {
+        setIsConnected(true);
+        setError(null);
+        reconnectAttemptsRef.current = 0;
+        handlersRef.current.onConnected?.();
+      };
+
+      // Handle incoming messages
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          // Handle heartbeat
+          if (data.type === 'heartbeat') {
+            setIsConnected(true);
+            setError(null);
+            return;
+          }
+
+          // Handle connected acknowledgement
+          if (data.type === 'connected') {
+            setIsConnected(true);
+            setError(null);
+            return;
+          }
+
+          // Handle error message from server
+          if (data.type === 'error') {
+            setError(data.message);
+            return;
+          }
+
+          // Handle task events
+          const taskEvent = data as TaskEventData;
+          switch (taskEvent.event_type) {
+            case 'task.created':
+              handlersRef.current.onTaskCreated?.(taskEvent);
+              break;
+            case 'task.updated':
+              handlersRef.current.onTaskUpdated?.(taskEvent);
+              break;
+            case 'task.completed':
+              handlersRef.current.onTaskCompleted?.(taskEvent);
+              break;
+            case 'task.deleted':
+              handlersRef.current.onTaskDeleted?.(taskEvent);
+              break;
+          }
+        } catch (err) {
+          console.error('Error parsing SSE message:', err);
+        }
+      };
+
+      // Handle errors
+      eventSource.onerror = (event) => {
+        setIsConnected(false);
+        handlersRef.current.onError?.(event);
+
+        // Close current connection instance
+        eventSource.close();
+        eventSourceRef.current = null;
+
+        // Attempt reconnection if not manually closed
+        if (!isManualCloseRef.current && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+          reconnectAttemptsRef.current += 1;
+          const delay = reconnectDelay * reconnectAttemptsRef.current;
+
+          reconnectTimeoutRef.current = setTimeout(() => {
+            connect();
+          }, delay);
+        } else if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+          setError('Live updates disconnected. Click Reconnect to retry.');
+          handlersRef.current.onDisconnected?.();
+        }
+      };
+    } catch (err) {
+      console.error('Error creating SSE connection:', err);
+    }
+  }, [enabled, userId, token, reconnectDelay]);
 
   /**
    * Manual reconnect function
@@ -225,19 +220,22 @@ export function useTaskEvents(
     disconnect();
     reconnectAttemptsRef.current = 0;
     isManualCloseRef.current = false;
+    setError(null);
     setTimeout(() => connect(), 100);
   }, [connect, disconnect]);
 
-  // Connect on mount, disconnect on unmount
+  // Connect when enabled and userId is available, disconnect on unmount
   useEffect(() => {
-    if (enabled) {
+    if (enabled && userId) {
       connect();
+    } else {
+      disconnect();
     }
 
     return () => {
       disconnect();
     };
-  }, [enabled, connect, disconnect]);
+  }, [enabled, userId, token, connect, disconnect]);
 
   return {
     isConnected,

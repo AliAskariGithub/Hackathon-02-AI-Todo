@@ -30,26 +30,30 @@ interface TaskEvent {
 }
 
 export async function GET(request: NextRequest) {
-  // Extract JWT token from Authorization header
+  // Extract JWT token from query param, Authorization header, or cookie
+  const searchParams = request.nextUrl.searchParams;
+  const queryToken = searchParams.get('token');
   const authHeader = request.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  const cookieToken = request.cookies.get('access_token')?.value;
+
+  const token = queryToken || (authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null) || cookieToken;
+  if (!token) {
     return new Response('Unauthorized', { status: 401 });
   }
 
-  const token = authHeader.substring(7);
-
   // Verify token and extract user_id
-  let userId: string;
-  try {
-    // Decode JWT to get user_id (in production, verify signature)
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    userId = payload.sub || payload.user_id;
+  let userId = searchParams.get('user_id');
+  if (!userId) {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      userId = payload.sub || payload.user_id;
 
-    if (!userId) {
+      if (!userId) {
+        return new Response('Invalid token', { status: 401 });
+      }
+    } catch (error) {
       return new Response('Invalid token', { status: 401 });
     }
-  } catch (error) {
-    return new Response('Invalid token', { status: 401 });
   }
 
   // Create ReadableStream for SSE
@@ -73,7 +77,7 @@ export async function GET(request: NextRequest) {
 
       try {
         // Connect to backend SSE endpoint
-        const backendUrl = `${BACKEND_URL}/api/events/stream?user_id=${userId}`;
+        const backendUrl = `${BACKEND_URL}/api/events/stream?user_id=${userId}&token=${encodeURIComponent(token)}`;
 
         // Use fetch with streaming for backend connection
         const response = await fetch(backendUrl, {

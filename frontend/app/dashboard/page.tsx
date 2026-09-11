@@ -240,7 +240,9 @@ export default function DashboardPage() {
       },
     },
     {
-      enabled: !!session, // Only enable SSE when user is authenticated
+      enabled: !isLoading && !!session?.user?.id,
+      userId: session?.user?.id,
+      token: session?.token,
     }
   );
 
@@ -857,7 +859,9 @@ export default function DashboardPage() {
                 "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
                 isSseConnected
                   ? "bg-green-500/10 text-green-600 dark:text-green-400"
-                  : "bg-red-500/10 text-red-600 dark:text-red-400"
+                  : sseError
+                  ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                  : "bg-muted text-muted-foreground"
               )}>
                 {isSseConnected ? (
                   <>
@@ -867,12 +871,12 @@ export default function DashboardPage() {
                 ) : (
                   <>
                     <WifiOff className="w-3 h-3" />
-                    <span>Disconnected</span>
+                    <span>{sseError ? "Disconnected" : "Connecting..."}</span>
                   </>
                 )}
               </div>
 
-              {!isSseConnected && (
+              {!isSseConnected && sseError && (
                 <Button
                   size="sm"
                   variant="outline"
