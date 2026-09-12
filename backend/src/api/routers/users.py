@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlmodel.ext.asyncio.session import AsyncSession
 from typing import Any
 from datetime import timedelta
-from ...models import UserRegistration, UserPublic
+from ...models import UserRegistration, UserPublic, UserLogin
 from ...services.user_service import UserService
 from ...utils.database import get_async_session
 from ...utils.logging_config import get_logger
@@ -30,6 +30,8 @@ async def register_user(
     Register a new user and automatically log them in with HTTP-only cookies.
     """
     logger.info(f"Received request to register user: {user_data.email}")
+    if not user_data.user_name:
+        user_data.user_name = user_data.username or user_data.email.split('@')[0]
 
     try:
         # Check if user already exists
@@ -113,24 +115,34 @@ async def register_user(
 @router.post("/login")
 async def login_user(
     response: Response,
-    user_data: UserRegistration,
+    user_data: UserLogin,
     session: AsyncSession = Depends(get_async_session)
 ) -> Any:
     """
     Login a user and set HTTP-only cookies with access and refresh tokens.
-    Returns user information (not tokens in body for security).
+    Returns user information and access token for cross-domain auth.
     """
-    logger.info(f"Login attempt for user: {user_data.email or user_data.user_name}")
+    ident = user_data.identifier or user_data.email or user_data.user_name or user_data.username or ""
+    logger.info(f"Login attempt for user: {ident}")
 
     try:
-        # Try to get user by email first if email is provided
         user = None
+        # Check by email if provided
         if user_data.email:
             user = await UserService.get_user_by_email(session, user_data.email)
+        elif user_data.identifier and "@" in user_data.identifier:
+            user = await UserService.get_user_by_email(session, user_data.identifier)
 
-        # If not found by email and user_name is provided, try to get by username
-        if not user and user_data.user_name:
-            user = await UserService.get_user_by_username(session, user_data.user_name)
+        # Check by username if not found yet
+        uname = user_data.user_name or user_data.username or (user_data.identifier if not user else None)
+        if not user and uname:
+            user = await UserService.get_user_by_username(session, uname)
+
+        # Fallback: if still not found and identifier exists, try email then username
+        if not user and user_data.identifier:
+            user = await UserService.get_user_by_email(session, user_data.identifier)
+            if not user:
+                user = await UserService.get_user_by_username(session, user_data.identifier)
 
         if not user:
             raise HTTPException(

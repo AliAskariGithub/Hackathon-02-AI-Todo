@@ -132,3 +132,8 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
+def async_session_factory():
+    """Helper to return an AsyncSession instance directly."""
+    return get_async_session_factory()()
+
+

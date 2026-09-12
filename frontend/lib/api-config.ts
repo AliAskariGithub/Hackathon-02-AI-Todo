@@ -35,3 +35,17 @@ export function getApiBaseUrl(): string {
 
   return envUrl || 'http://localhost:8000';
 }
+
+/**
+ * Returns the appropriate credentials mode for fetch/EventSource.
+ * - On localhost: 'include' (supports local dev cookies)
+ * - In production (cross-domain): 'same-origin' (uses Bearer token auth)
+ */
+export function getCredentialsMode(): RequestCredentials {
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+    return isLocalhost ? 'include' : 'same-origin';
+  }
+  return 'same-origin';
+}

@@ -22,6 +22,8 @@ from src.utils.exception_handlers import (
 )
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.exceptions import RequestValidationError
+from starlette.requests import Request
+from starlette.responses import Response
 
 # Load environment variables from .env file with explicit path
 env_path = Path(__file__).parent / '.env'

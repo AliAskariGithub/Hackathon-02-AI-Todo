@@ -19,7 +19,7 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/providers/auth-provider';
-import { getApiBaseUrl } from '@/lib/api-config';
+import { getApiBaseUrl, getCredentialsMode } from '@/lib/api-config';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -207,7 +207,7 @@ const ChatPageContent = () => {
         }
 
         const response = await fetch(`${apiBaseUrl}/api/${userId}/conversations`, {
-          credentials: 'include',
+          credentials: getCredentialsMode(),
           headers,
         });
 
@@ -221,7 +221,7 @@ const ChatPageContent = () => {
             const messagesResponse = await fetch(
               `${apiBaseUrl}/api/${userId}/conversations/${latestConversation.id}/messages`,
               {
-                credentials: 'include',
+                credentials: getCredentialsMode(),
                 headers,
               }
             );
@@ -365,7 +365,7 @@ const ChatPageContent = () => {
 
       const response = await fetch(`${apiBaseUrl}/api/${userId}/chat`, {
         method: 'POST',
-        credentials: 'include',
+        credentials: getCredentialsMode(),
         headers,
         body: JSON.stringify({
           content: currentInput,

@@ -2,7 +2,8 @@
 
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import apiClient from '@/services/api-client';
-import { getApiBaseUrl } from '@/lib/api-config';
+import { getApiBaseUrl, getCredentialsMode } from '@/lib/api-config';
+import { authClient } from '@/lib/auth-client';
 
 interface User {
   id: string;
@@ -48,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Try to fetch current user info
         const response = await fetch(`${getApiBaseUrl()}/api/users/me`, {
-          credentials: 'include', // Still include cookies for local development
+          credentials: getCredentialsMode(), // Include cookies locally, same-origin in production
           headers
         });
 
@@ -104,6 +105,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    try {
+      await authClient.signOut();
+    } catch (e) {
+      console.debug('Neon auth signOut error (non-fatal):', e);
+    }
     try {
       // Call backend logout endpoint to clear cookies
       await apiClient.post('/api/auth/logout', {});

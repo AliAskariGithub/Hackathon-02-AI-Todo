@@ -9,6 +9,8 @@ import { motion } from "framer-motion";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { toast } from "@/hooks/use-toast";
 
+import { authClient } from "@/lib/auth-client";
+
 interface User {
   id: string;
   email: string;
@@ -57,24 +59,61 @@ export default function SignupForm() {
     setError(null);
 
     try {
-      // Register user - backend will auto-login and set cookies
-      const response = await apiClient.post<{ user: User; access_token?: string }>('/api/users/register', {
-        user_name: username,
-        email,
-        password,
-      });
+      let authUser: User | null = null;
+      let authToken: string | undefined = undefined;
 
-      if (response.user) {
-        // Store access token for cross-domain authentication (production)
-        if (response.access_token) {
-          localStorage.setItem('access_token', response.access_token);
-          localStorage.setItem('token', response.access_token);
+      // Primary: Neon Auth sign-up
+      try {
+        const { data, error: neonError } = await authClient.signUp.email({
+          email,
+          password,
+          name: username,
+          callbackURL: typeof window !== 'undefined' ? `${window.location.origin}/dashboard` : undefined,
+        });
+
+        if (neonError) {
+          console.warn("Neon Auth signup error:", neonError);
+          if (neonError.status === 422 || neonError.message?.toLowerCase().includes("exist")) {
+            throw new Error(neonError.message || "A user with this email already exists");
+          }
+        } else if (data?.user) {
+          authUser = {
+            id: data.user.id,
+            email: data.user.email,
+            name: data.user.name,
+            user_name: data.user.name,
+          };
+          authToken = (data as any)?.token;
+        }
+      } catch (neonErr: any) {
+        if (neonErr.message?.toLowerCase().includes("exist") || neonErr.message?.toLowerCase().includes("password")) {
+          throw neonErr;
+        }
+        console.warn("Neon Auth signup failed, falling back to backend signup:", neonErr);
+      }
+
+      // Fallback: Backend register
+      if (!authUser) {
+        const response = await apiClient.post<{ user: User; access_token?: string }>('/api/users/register', {
+          user_name: username,
+          email,
+          password,
+        });
+
+        if (response.user) {
+          authUser = response.user;
+          authToken = response.access_token;
+        }
+      }
+
+      if (authUser) {
+        if (authToken) {
+          localStorage.setItem('access_token', authToken);
+          localStorage.setItem('token', authToken);
         }
 
-        // Update auth context with user data
-        login(response.user, response.access_token);
+        login(authUser, authToken);
 
-        // Show success toast
         toast({
           variant: "success",
           title: "Account Created!",

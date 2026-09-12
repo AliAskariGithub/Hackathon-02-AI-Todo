@@ -7,6 +7,8 @@ import { motion } from "framer-motion";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { toast } from "@/hooks/use-toast";
 
+import { authClient } from "@/lib/auth-client";
+
 interface User {
   id: string;
   email: string;
@@ -31,33 +33,55 @@ export default function LoginForm() {
     setRedirecting(false);
 
     try {
-      // Determine if identifier is email or username
       const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
-      let userName;
+      let authUser: User | null = null;
+      let authToken: string | undefined = undefined;
 
+      // Primary: Neon Auth sign-in if identifier is email
       if (isEmail) {
-        userName = identifier.split('@')[0]; // Extract username from email
-      } else {
-        userName = identifier;
+        try {
+          const { data, error: neonError } = await authClient.signIn.email({
+            email: identifier,
+            password,
+            callbackURL: typeof window !== 'undefined' ? `${window.location.origin}/dashboard` : undefined,
+          });
+
+          if (data?.user) {
+            authUser = {
+              id: data.user.id,
+              email: data.user.email,
+              name: data.user.name,
+              user_name: data.user.name,
+            };
+            authToken = (data as any)?.token;
+          }
+        } catch (neonErr) {
+          console.warn("Neon Auth sign-in attempted, falling back to backend login:", neonErr);
+        }
       }
 
-      // Call the backend API to login the user
-      // Backend will set HTTP-only cookies automatically
-      const response = await apiClient.post<{ user: User; access_token?: string }>('/api/users/login', {
-        user_name: userName,
-        email: isEmail ? identifier : "",
-        password,
-      });
+      // Fallback / legacy login with backend
+      if (!authUser) {
+        const userName = isEmail ? identifier.split('@')[0] : identifier;
+        const response = await apiClient.post<{ user: User; access_token?: string }>('/api/users/login', {
+          user_name: userName,
+          email: isEmail ? identifier : "",
+          password,
+        });
 
-      if (response.user) {
-        // Store access token for cross-domain authentication (production)
-        if (response.access_token) {
-          localStorage.setItem('access_token', response.access_token);
-          localStorage.setItem('token', response.access_token);
+        if (response.user) {
+          authUser = response.user;
+          authToken = response.access_token;
+        }
+      }
+
+      if (authUser) {
+        if (authToken) {
+          localStorage.setItem('access_token', authToken);
+          localStorage.setItem('token', authToken);
         }
 
-        // Update auth context with user data
-        login(response.user, response.access_token);
+        login(authUser, authToken);
 
         setRedirecting(true);
 

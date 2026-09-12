@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { getApiBaseUrl } from '@/lib/api-config';
+import { getApiBaseUrl, getCredentialsMode } from '@/lib/api-config';
 
 /**
  * Task Event Types
@@ -129,7 +129,7 @@ export function useTaskEvents(
       const tokenParam = effectiveToken ? `&token=${encodeURIComponent(effectiveToken)}` : '';
       const url = `${apiBaseUrl}/api/events/stream?user_id=${encodeURIComponent(userId)}${tokenParam}`;
 
-      const eventSource = new EventSource(url, { withCredentials: true });
+      const eventSource = new EventSource(url, { withCredentials: getCredentialsMode() === 'include' });
       eventSourceRef.current = eventSource;
       isManualCloseRef.current = false;
 

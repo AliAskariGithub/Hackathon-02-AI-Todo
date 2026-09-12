@@ -1,5 +1,5 @@
 
-import { getApiBaseUrl } from '@/lib/api-config';
+import { getApiBaseUrl, getCredentialsMode } from '@/lib/api-config';
 
 class ApiClient {
   public get baseUrl(): string {
@@ -34,7 +34,7 @@ class ApiClient {
 
     const config: RequestInit = {
       ...options,
-      credentials: 'include', // Include cookies for local development
+      credentials: options.credentials || getCredentialsMode(),
       headers,
     };
 
@@ -50,7 +50,7 @@ class ApiClient {
           // Attempt to refresh the token
           const refreshResponse = await fetch(`${this.baseUrl}/api/auth/refresh`, {
             method: 'POST',
-            credentials: 'include'
+            credentials: getCredentialsMode()
           });
 
           if (refreshResponse.ok) {

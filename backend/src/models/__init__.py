@@ -213,9 +213,18 @@ class TestimonialPublic(TestimonialBase):
 
 
 class UserRegistration(SQLModel):
-    user_name: str = Field(min_length=1, max_length=100)
+    user_name: Optional[str] = Field(default=None, max_length=100)
+    username: Optional[str] = Field(default=None, max_length=100)
     email: str = Field(min_length=5, max_length=100)
     password: str = Field(min_length=6, max_length=128)  # Plain password to be hashed
+
+
+class UserLogin(SQLModel):
+    user_name: Optional[str] = Field(default=None, max_length=100)
+    username: Optional[str] = Field(default=None, max_length=100)
+    email: Optional[str] = Field(default=None, max_length=100)
+    identifier: Optional[str] = Field(default=None, max_length=100)
+    password: str = Field(min_length=1, max_length=128)
 
 
 class UserPublic(SQLModel):

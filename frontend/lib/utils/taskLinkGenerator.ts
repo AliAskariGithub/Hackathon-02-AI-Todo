@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from '@/lib/api-config';
+import { getApiBaseUrl, getCredentialsMode } from '@/lib/api-config';
 
 /**
  * Utility functions for parsing and generating task links from chat messages
@@ -59,7 +59,7 @@ export async function validateTaskAccess(taskId: string, userId: string): Promis
     const response = await fetch(
       `${apiBaseUrl}/api/${userId}/tasks/${taskId}`,
       {
-        credentials: 'include', // Send cookies for authentication
+        credentials: getCredentialsMode(), // Send cookies locally, same-origin in production
         headers: {
           'Content-Type': 'application/json',
         },

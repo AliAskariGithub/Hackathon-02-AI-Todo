@@ -10,26 +10,56 @@ logger = logging.getLogger(__name__)
 
 security = HTTPBearer(auto_error=False)  # Make auto_error False for optional auth
 
+from sqlalchemy import text
+from ..utils.database import async_session_factory
+
+async def validate_neon_auth_session(token: str) -> Optional[Dict[str, Any]]:
+    """Validate opaque session token from Neon Auth."""
+    if not token or len(token) > 256:
+        return None
+    try:
+        async with async_session_factory() as db_session:
+            query = text(
+                """
+                SELECT s."userId", s."expiresAt", u.name, u.email
+                FROM neon_auth.session s
+                JOIN neon_auth.user u ON s."userId" = u.id
+                WHERE s.token = :token AND s."expiresAt" > NOW()
+                LIMIT 1
+                """
+            )
+            result = await db_session.execute(query, {"token": token})
+            row = result.fetchone()
+            if row:
+                user_id, expires_at, name, email = row
+                # Ensure user exists in public."user" table so task foreign keys don't break
+                upsert = text(
+                    """
+                    INSERT INTO public."user" (id, email, user_name, password, created_at, updated_at)
+                    VALUES (:id, :email, :name, '', NOW(), NOW())
+                    ON CONFLICT (id) DO UPDATE SET updated_at = NOW()
+                    """
+                )
+                await db_session.execute(upsert, {"id": user_id, "email": email, "name": name or email.split("@")[0]})
+                await db_session.commit()
+                return {
+                    "sub": str(user_id),
+                    "email": email,
+                    "name": name,
+                    "auth_provider": "neon_auth"
+                }
+    except Exception as e:
+        logger.debug(f"Error checking neon_auth.session: {e}")
+    return None
+
 async def get_current_user(
     request: Request,
     access_token: Optional[str] = Cookie(None),
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ) -> Dict[str, Any]:
     """
-    Dependency to get the current user from the JWT token.
-    Supports both cookie-based (local dev) and header-based (production) authentication.
-    Cookie takes priority over Authorization header for local development.
-
-    Args:
-        request: The incoming request object
-        access_token: JWT token from HTTP-only cookie (local dev)
-        credentials: The authorization credentials from header (production)
-
-    Returns:
-        Decoded JWT payload containing user information
-
-    Raises:
-        HTTPException: If the token is invalid, expired, or missing
+    Dependency to get the current user from the JWT or Neon Auth session token.
+    Supports cookie-based, header-based, and Neon Auth session tokens.
     """
     token = None
     auth_method = None
@@ -51,6 +81,15 @@ async def get_current_user(
             detail="Not authenticated. Please log in."
         )
 
+    # First: Check Neon Auth session
+    neon_user = await validate_neon_auth_session(token)
+    if neon_user:
+        request.state.user_id = neon_user["sub"]
+        request.state.user_email = neon_user.get("email", "")
+        request.state.auth_method = "neon_auth"
+        return neon_user
+
+    # Second: Check JWT token
     try:
         payload = decode_jwt_token(token)
 
@@ -113,6 +152,15 @@ async def get_current_user_from_query(
             detail="Not authenticated. Token required in query parameter or cookie."
         )
 
+    # First: Check Neon Auth session
+    neon_user = await validate_neon_auth_session(effective_token)
+    if neon_user:
+        request.state.user_id = neon_user["sub"]
+        request.state.user_email = neon_user.get("email", "")
+        request.state.auth_method = "neon_auth_query"
+        return neon_user
+
+    # Second: Check JWT token
     try:
         payload = decode_jwt_token(effective_token)
 
