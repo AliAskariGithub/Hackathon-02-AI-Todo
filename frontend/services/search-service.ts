@@ -1,8 +1,4 @@
-/**
- * Search service for frontend API calls.
- *
- * Handles search, filtering, sorting, and natural language queries.
- */
+import { getApiBaseUrl } from '@/lib/api-config';
 
 interface Task {
   id: string;
@@ -50,7 +46,9 @@ interface NaturalLanguageSearchResponse {
 }
 
 class SearchService {
-  private baseUrl: string = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_LOCAL_URL || 'http://localhost:8000';
+  private get baseUrl(): string {
+    return getApiBaseUrl();
+  }
 
   /**
    * Search and filter tasks with pagination

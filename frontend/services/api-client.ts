@@ -1,15 +1,10 @@
 
+import { getApiBaseUrl } from '@/lib/api-config';
+
 class ApiClient {
-  private baseUrl: string = (() => {
-    // Runtime detection for Docker deployment
-    // If running in browser and env var points to Docker internal DNS, use localhost instead
-    if (typeof window !== 'undefined') {
-      const envUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_LOCAL_URL || 'http://localhost:8000';
-      // Replace Docker internal DNS with localhost for browser access
-      return envUrl.replace('http://localhost:8000', 'http://localhost:8000');
-    }
-    return process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_LOCAL_URL || 'http://localhost:8000';
-  })();
+  public get baseUrl(): string {
+    return getApiBaseUrl();
+  }
 
   /**
    * Generic method to make authenticated API requests.

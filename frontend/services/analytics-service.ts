@@ -1,3 +1,5 @@
+import { getApiBaseUrl } from '@/lib/api-config';
+
 interface AnalyticsStats {
   all_users: number;
   total_tasks: number;
@@ -6,10 +8,8 @@ interface AnalyticsStats {
 }
 
 class AnalyticsService {
-  private baseUrl: string;
-
-  constructor() {
-    this.baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_LOCAL_URL || 'http://localhost:8000';
+  private get baseUrl(): string {
+    return getApiBaseUrl();
   }
 
   async getStats(): Promise<AnalyticsStats> {

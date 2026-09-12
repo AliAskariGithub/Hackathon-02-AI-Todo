@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 /**
  * Task Event Types
@@ -124,7 +125,7 @@ export function useTaskEvents(
         : null);
 
       // Connect to backend SSE endpoint
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+      const apiBaseUrl = getApiBaseUrl();
       const tokenParam = effectiveToken ? `&token=${encodeURIComponent(effectiveToken)}` : '';
       const url = `${apiBaseUrl}/api/events/stream?user_id=${encodeURIComponent(userId)}${tokenParam}`;
 

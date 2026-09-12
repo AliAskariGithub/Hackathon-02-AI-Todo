@@ -1,3 +1,5 @@
+import { getApiBaseUrl } from '@/lib/api-config';
+
 /**
  * Utility functions for parsing and generating task links from chat messages
  */
@@ -40,15 +42,15 @@ export function generateTaskLink(taskId: string, source: string = 'chat'): strin
 }
 
 /**
- * Validate if a task exists and is accessible to the user
- * Returns true if task exists, false otherwise
+ * Validates whether the user has access to a specific task.
+ * Makes an authenticated request to the backend.
  *
  * @param taskId - The ID of the task to validate
  * @param userId - The ID of the current user (from session context)
  */
 export async function validateTaskAccess(taskId: string, userId: string): Promise<boolean> {
   try {
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
+    const apiBaseUrl = getApiBaseUrl()
 
     if (!userId) {
       return false

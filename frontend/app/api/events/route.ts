@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 /**
  * SSE Route Handler for Real-Time Task Events
@@ -14,8 +15,8 @@ import { NextRequest } from 'next/server';
  */
 
 // Use server-side env var for internal Docker communication
-// Falls back to NEXT_PUBLIC for local development
-const BACKEND_URL = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+// Falls back to getApiBaseUrl() for production HF Space / local development
+const BACKEND_URL = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || getApiBaseUrl();
 const HEARTBEAT_INTERVAL = 30000; // 30 seconds
 
 interface TaskEvent {

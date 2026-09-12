@@ -2,6 +2,7 @@
 
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import apiClient from '@/services/api-client';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 interface User {
   id: string;
@@ -46,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         // Try to fetch current user info
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/users/me`, {
+        const response = await fetch(`${getApiBaseUrl()}/api/users/me`, {
           credentials: 'include', // Still include cookies for local development
           headers
         });

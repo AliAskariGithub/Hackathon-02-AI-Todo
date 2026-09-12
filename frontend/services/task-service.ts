@@ -1,3 +1,5 @@
+import { getApiBaseUrl } from '@/lib/api-config';
+
 interface Task {
   id: string;
   title: string;
@@ -33,7 +35,9 @@ interface CompleteTaskResponse {
 }
 
 class TaskService {
-  private baseUrl: string = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_LOCAL_URL || 'http://localhost:8000';
+  private get baseUrl(): string {
+    return getApiBaseUrl();
+  }
 
   /**
    * Get all tasks for a user with optional filtering

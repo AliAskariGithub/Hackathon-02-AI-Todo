@@ -19,6 +19,7 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/providers/auth-provider';
+import { getApiBaseUrl } from '@/lib/api-config';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -117,8 +118,8 @@ const ChatPageContent = () => {
   const { focusMode, displayMode } = useUIStore();
   const { session } = useAuth();
 
-  // Get API base URL from environment
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+  // Get API base URL from centralized resolver
+  const apiBaseUrl = getApiBaseUrl();
 
   // Determine loading message based on user input
   const getLoadingMessage = (userInput: string): string => {

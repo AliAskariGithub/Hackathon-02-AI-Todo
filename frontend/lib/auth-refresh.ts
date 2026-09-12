@@ -6,6 +6,8 @@
  * continuous authentication without interrupting the user experience.
  */
 
+import { getApiBaseUrl } from '@/lib/api-config';
+
 let refreshInterval: NodeJS.Timeout | null = null;
 
 /**
@@ -31,7 +33,7 @@ async function refreshAccessToken(): Promise<boolean> {
       return true; // Return true to prevent logout
     }
 
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+    const apiBaseUrl = getApiBaseUrl();
 
     console.log('[Auth Refresh] Attempting to refresh access token...');
 

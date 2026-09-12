@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/providers/auth-provider';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 /**
  * Auth configuration for cookie-based authentication.
@@ -10,7 +11,9 @@ import { useAuth } from '@/providers/auth-provider';
  * No client-side token management is needed.
  */
 export const authConfig = {
-  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000',
+  get baseURL() {
+    return getApiBaseUrl();
+  },
   credentials: 'include' as RequestCredentials, // Always include cookies
 };
 

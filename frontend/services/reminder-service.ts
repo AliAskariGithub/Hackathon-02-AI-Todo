@@ -4,6 +4,8 @@
  * Handles reminder scheduling, retrieval, and cancellation via Dapr Service Invocation.
  */
 
+import { getApiBaseUrl } from '@/lib/api-config';
+
 interface Reminder {
   id: string;
   task_id: string;
@@ -22,7 +24,9 @@ interface ReminderCreate {
 }
 
 class ReminderService {
-  private baseUrl: string = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_LOCAL_URL || 'http://localhost:8000';
+  private get baseUrl(): string {
+    return getApiBaseUrl();
+  }
 
   /**
    * Schedule a new reminder for a task
