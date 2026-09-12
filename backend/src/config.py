@@ -33,8 +33,13 @@ class Settings(BaseSettings):
     # Dapr configuration
     enable_dapr: bool = Field(default=False)
 
+    # Hugging Face deployment configuration (optional)
+    hf_token: Optional[str] = None
+    hf_space_id: Optional[str] = None
+
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 
 settings = Settings()
